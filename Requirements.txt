@@ -1,1 +1,1 @@
-pip install streamlit requests pandas
+pip install streamlit-option-menu beautifulsoup4
