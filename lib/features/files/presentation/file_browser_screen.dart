@@ -96,7 +96,7 @@ class _FileBrowserScreenState extends ConsumerState<FileBrowserScreen> {
                 : ListView.separated(
                     padding: const EdgeInsets.all(TorrentFlowTheme.standardPadding),
                     itemCount: _entities.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: TorrentFlowTheme.tightPadding),
+                    separatorBuilder: (context, index) => const SizedBox(height: TorrentFlowTheme.tightPadding),
                     itemBuilder: (context, index) {
                       final entity = _entities[index];
                       return _FileEntityTile(

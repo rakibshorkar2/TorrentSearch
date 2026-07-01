@@ -55,7 +55,7 @@ class DownloadsScreen extends ConsumerWidget {
             : ListView.separated(
                 padding: const EdgeInsets.all(TorrentFlowTheme.standardPadding),
                 itemCount: tasks.length,
-                separatorBuilder: (_, _) => const SizedBox(height: TorrentFlowTheme.spacing),
+                separatorBuilder: (context, index) => const SizedBox(height: TorrentFlowTheme.spacing),
                 itemBuilder: (context, index) {
                   final task = tasks[index];
                   return _DownloadCard(task: task, isDark: isDark);
