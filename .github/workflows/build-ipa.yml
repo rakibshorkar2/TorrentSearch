@@ -40,6 +40,22 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Build C++ native engine
+        run: |
+          cd native
+          cmake -S torrent_engine -B build/ios \
+            -G Xcode \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0 \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO \
+            -DIOS=ON
+          cmake --build build/ios --config Release
+          cp build/ios/Release/libtorrent_engine.a ../ios/Runner/
+
+      - name: Patch Xcode project with native sources
+        run: python3 native/patch_xcode.py
+
       - name: Build unsigned IPA
         run: |
           flutter build ios --release --no-codesign
@@ -76,6 +92,11 @@ jobs:
             
             ### Changes
             ${{ github.event.head_commit.message }}
+            
+            ### Native Engine
+            - C++ torrent engine: SHA-1 verification, bencode parsing, magnet URI parsing, piece management
+            - Swift native service: background downloads, local notifications, Keychain, network monitoring
+            - Optimized for iPhone 15 Pro (arm64)
             
             ### Notes
             - Unsigned IPA for sideloading
