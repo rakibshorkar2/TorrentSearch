@@ -32,10 +32,12 @@ Run flutter pub get
 Resolving dependencies...
 The current Dart SDK version is 3.7.2.
 
-Because torrentflow requires SDK version ^3.11.0, version solving failed.
+Because flutter_lints 6.0.0 requires SDK version ^3.8.0 and no versions of flutter_lints match >6.0.0 <7.0.0, flutter_lints ^6.0.0 is forbidden.
+So, because torrentflow depends on flutter_lints ^6.0.0, version solving failed.
 
 
-You can try the following suggestion to make the pubspec resolve:
+You can try one of the following suggestions to make the pubspec resolve:
 * Try using the Flutter SDK version: 3.44.4. 
+* Consider downgrading your constraint on flutter_lints: flutter pub add dev:flutter_lints:^5.0.0
 Failed to update packages.
 Error: Process completed with exit code 1.
