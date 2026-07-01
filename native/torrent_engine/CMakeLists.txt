@@ -39,7 +39,5 @@ endif()
 
 # Install
 install(TARGETS torrent_engine
-  EXPORT torrent_engineTargets
   ARCHIVE DESTINATION lib
-  PUBLIC_HEADERS DESTINATION include
 )
