@@ -6,6 +6,7 @@ import '../services/torrent_search_service.dart';
 import '../services/seedr_service.dart';
 import '../services/download_service.dart';
 import '../services/storage_service.dart';
+import '../services/background_download_service.dart';
 
 final storageServiceProvider = Provider<StorageService>((ref) {
   final service = StorageService();
@@ -15,6 +16,13 @@ final storageServiceProvider = Provider<StorageService>((ref) {
 
 final downloadServiceProvider = Provider<DownloadService>((ref) {
   return DownloadService();
+});
+
+final backgroundDownloadServiceProvider = Provider<BackgroundDownloadService>((ref) {
+  final downloadService = ref.read(downloadServiceProvider);
+  final service = BackgroundDownloadService(downloadService, ref);
+  ref.onDispose(() => service.dispose());
+  return service;
 });
 
 final torrentSearchServiceProvider = Provider<TorrentSearchService>((ref) {

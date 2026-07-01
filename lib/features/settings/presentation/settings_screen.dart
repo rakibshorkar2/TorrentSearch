@@ -106,7 +106,7 @@ class SettingsScreen extends ConsumerWidget {
                 isDark: isDark,
               ),
             ]),
-            _SectionHeader(title: 'Network', isDark: isDark),
+            _SectionHeader(title: 'Network & Background', isDark: isDark),
             _SettingsGroup(children: [
               _SettingTile(
                 icon: CupertinoIcons.wifi,
@@ -121,12 +121,9 @@ class SettingsScreen extends ConsumerWidget {
               ),
               _Divider(isDark: isDark),
               _SettingTile(
-                icon: CupertinoIcons.shield,
-                title: 'SOCKS5 Proxy',
-                subtitle: settings.socks5ProxyHost != null
-                    ? '${settings.socks5ProxyHost}:${settings.socks5ProxyPort}'
-                    : 'Disabled',
-                onTap: () => _showProxyDialog(context, ref, settings),
+                icon: CupertinoIcons.moon_zzz,
+                title: 'Background Downloads',
+                subtitle: 'Active — Torrents keep app alive; Seedr uses URLSession',
                 isDark: isDark,
               ),
             ]),
@@ -237,56 +234,6 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  void _showProxyDialog(BuildContext context, WidgetRef ref, AppSettings settings) {
-    final hostCtrl = TextEditingController(text: settings.socks5ProxyHost ?? '');
-    final portCtrl = TextEditingController(
-      text: settings.socks5ProxyPort?.toString() ?? '',
-    );
-    showCupertinoDialog(
-      context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('SOCKS5 Proxy'),
-        content: Column(
-          children: [
-            CupertinoTextField(
-              controller: hostCtrl,
-              placeholder: 'Host (e.g. 127.0.0.1)',
-            ),
-            const SizedBox(height: 8),
-            CupertinoTextField(
-              controller: portCtrl,
-              placeholder: 'Port (e.g. 1080)',
-              keyboardType: TextInputType.number,
-            ),
-          ],
-        ),
-        actions: [
-          CupertinoButton(
-            child: const Text('Clear'),
-            onPressed: () {
-              ref.read(settingsProvider.notifier).update(settings.copyWith(
-                socks5ProxyHost: null,
-                socks5ProxyPort: null,
-              ));
-              Navigator.of(ctx).pop();
-            },
-          ),
-          CupertinoButton(
-            child: const Text('Save'),
-            onPressed: () {
-              final host = hostCtrl.text.isNotEmpty ? hostCtrl.text : null;
-              final port = int.tryParse(portCtrl.text);
-              ref.read(settingsProvider.notifier).update(settings.copyWith(
-                socks5ProxyHost: host,
-                socks5ProxyPort: port,
-              ));
-              Navigator.of(ctx).pop();
-            },
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _SectionHeader extends StatelessWidget {

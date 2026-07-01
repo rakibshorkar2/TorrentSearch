@@ -36,10 +36,6 @@ class StorageService {
         downloadSpeedLimit: map['downloadSpeedLimit'] as int? ?? 0,
         uploadSpeedLimit: map['uploadSpeedLimit'] as int? ?? 0,
         connectionTimeout: map['connectionTimeout'] as int? ?? 10,
-        socks5ProxyHost: map['socks5ProxyHost']?.toString(),
-        socks5ProxyPort: map['socks5ProxyPort'] as int?,
-        socks5ProxyUser: map['socks5ProxyUser']?.toString(),
-        socks5ProxyPass: map['socks5ProxyPass']?.toString(),
       );
     } catch (_) {
       return const AppSettings();
