@@ -2,6 +2,8 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'native_bindings.dart';
 
+typedef BackgroundDownloadCallback = void Function(String taskId, {String? error});
+
 class NativeTorrentService {
   static final NativeTorrentService _instance = NativeTorrentService._();
   factory NativeTorrentService() => _instance;
@@ -9,12 +11,31 @@ class NativeTorrentService {
 
   TorrentEngine? _engine;
   static const _channel = MethodChannel('com.torrentflow/native');
+  BackgroundDownloadCallback? _onBackgroundDownloadComplete;
 
   bool get isAvailable => Platform.isIOS;
 
   TorrentEngine get engine {
     _engine ??= TorrentEngine();
     return _engine!;
+  }
+
+  void initialize({BackgroundDownloadCallback? onBackgroundDownloadComplete}) {
+    _onBackgroundDownloadComplete = onBackgroundDownloadComplete;
+    _channel.setMethodCallHandler(_handleMethodCall);
+  }
+
+  Future<dynamic> _handleMethodCall(MethodCall call) async {
+    switch (call.method) {
+      case 'backgroundDownloadComplete':
+        final args = call.arguments as Map<dynamic, dynamic>;
+        final taskId = args['taskId'] as String? ?? '';
+        final error = args['error'] as String?;
+        _onBackgroundDownloadComplete?.call(taskId, error: error);
+        return null;
+      default:
+        return null;
+    }
   }
 
   Future<bool> registerBackgroundTask(String taskId) async {

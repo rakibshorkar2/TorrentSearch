@@ -18,7 +18,11 @@ class SeedrService {
 
   Future<bool> isLoggedIn() async {
     _token ??= await _storage.read(key: AppConstants.keychainSeedrToken);
-    return _token != null && _token!.isNotEmpty;
+    if (_token != null && _token!.isNotEmpty) {
+      _dio.options.headers['Authorization'] = 'Bearer $_token';
+      return true;
+    }
+    return false;
   }
 
   Future<void> login(String email, String password) async {
@@ -28,8 +32,8 @@ class SeedrService {
         'password': password,
       });
       _token = response.data['token']?.toString();
-      if (_token != null) {
-        await _storage.write(key: AppConstants.keychainSeedrToken, value: _token);
+      if (_token != null && _token!.isNotEmpty) {
+        await _storage.write(key: AppConstants.keychainSeedrToken, value: _token!);
         _dio.options.headers['Authorization'] = 'Bearer $_token';
       } else {
         throw SeedrException('Login failed: Invalid credentials');
@@ -106,6 +110,43 @@ class SeedrService {
       )).toList();
     } on DioException catch (e) {
       throw SeedrException('Failed to get torrents: ${e.message}');
+    }
+  }
+
+  Future<List<SeedrItem>> listContents({int? folderId}) async {
+    _ensureAuth();
+    try {
+      if (folderId != null) {
+        final files = await getFiles(folderId.toString());
+        return files.map((f) => SeedrItem(
+          id: f.id,
+          name: f.name,
+          size: f.size,
+          type: SeedrItemType.file,
+          downloadUrl: f.downloadUrl,
+        )).toList();
+      }
+      final folders = await getFolders();
+      final torrents = await getTorrents();
+      return [
+        ...folders.map((f) => SeedrItem(
+          id: f.id,
+          name: f.name,
+          size: f.size,
+          type: SeedrItemType.folder,
+          fileCount: f.fileCount,
+        )),
+        ...torrents.map((t) => SeedrItem(
+          id: t.id,
+          name: t.name,
+          size: t.size,
+          type: SeedrItemType.torrent,
+          progress: t.progress,
+          downloadUrl: t.downloadUrl,
+        )),
+      ];
+    } on DioException catch (e) {
+      throw SeedrException('Failed to list contents: ${e.message}');
     }
   }
 

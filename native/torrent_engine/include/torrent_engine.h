@@ -49,10 +49,13 @@ void bencode_free(TorrentMetadata* meta);
 int magnet_parse(const char* uri, MagnetInfo* out);
 void magnet_free(MagnetInfo* info);
 
-// SHA-1
-void sha1_init(uint32_t state[5]);
-void sha1_update(uint32_t state[5], const uint8_t* data, int64_t len);
-void sha1_final(uint32_t state[5], uint8_t digest[20]);
+// SHA-1 (opaque handle)
+typedef void* SHA1Handle;
+SHA1Handle sha1_create();
+void sha1_destroy(SHA1Handle ctx);
+void sha1_reset(SHA1Handle ctx);
+void sha1_update(SHA1Handle ctx, const uint8_t* data, int64_t len);
+void sha1_final(SHA1Handle ctx, uint8_t digest[20]);
 int sha1_verify_piece(const uint8_t* data, int64_t len, const uint8_t* expected_hash);
 
 // Piece Management
@@ -73,6 +76,7 @@ void bandwidth_destroy(BandwidthManagerHandle bw);
 int64_t bandwidth_request_download(BandwidthManagerHandle bw, int64_t bytes);
 int64_t bandwidth_request_upload(BandwidthManagerHandle bw, int64_t bytes);
 void bandwidth_set_limits(BandwidthManagerHandle bw, int64_t max_down, int64_t max_up);
+void bandwidth_tick_time(BandwidthManagerHandle bw, int64_t now_ms);
 
 // Torrent health
 double calculate_health(int seeders, int leechers);

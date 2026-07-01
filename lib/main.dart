@@ -1,7 +1,9 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
+import 'core/native/native_service.dart';
 import 'providers/app_providers.dart';
+
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,7 +26,11 @@ class _TorrentFlowAppStartupState extends ConsumerState<TorrentFlowAppStartup> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(backgroundDownloadServiceProvider).initialize();
+      final bgService = ref.read(backgroundDownloadServiceProvider);
+      NativeTorrentService().initialize(
+        onBackgroundDownloadComplete: bgService.handleBackgroundDownloadComplete,
+      );
+      bgService.initialize();
     });
   }
 

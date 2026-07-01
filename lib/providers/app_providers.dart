@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/app_settings.dart';
 import '../models/torrent.dart';
@@ -9,13 +10,13 @@ import '../services/storage_service.dart';
 import '../services/background_download_service.dart';
 
 final storageServiceProvider = Provider<StorageService>((ref) {
-  final service = StorageService();
-  ref.onDispose(() {});
-  return service;
+  return StorageService();
 });
 
 final downloadServiceProvider = Provider<DownloadService>((ref) {
-  return DownloadService();
+  final service = DownloadService();
+  ref.onDispose(() => service.dispose());
+  return service;
 });
 
 final backgroundDownloadServiceProvider = Provider<BackgroundDownloadService>((ref) {
@@ -46,6 +47,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
 
   Future<void> _load() async {
     final settings = await _storage.loadSettings();
+    if (!mounted) return;
     state = settings;
   }
 
@@ -62,6 +64,7 @@ final downloadTasksProvider = StateNotifierProvider<DownloadTasksNotifier, List<
 class DownloadTasksNotifier extends StateNotifier<List<DownloadTask>> {
   final DownloadService _service;
   final StorageService _storage;
+  final Map<String, StreamSubscription<DownloadTask>> _subscriptions = {};
 
   DownloadTasksNotifier(this._service, this._storage) : super([]) {
     _load();
@@ -69,12 +72,47 @@ class DownloadTasksNotifier extends StateNotifier<List<DownloadTask>> {
 
   Future<void> _load() async {
     final tasks = await _storage.loadDownloads();
+    if (!mounted) return;
     state = tasks;
   }
 
-  void addTask(DownloadTask task) {
-    state = [...state, task];
-    _persist();
+  Stream<DownloadTask> addDownload({
+    required String title,
+    required String url,
+    required String savePath,
+    String? magnetUri,
+    String? infoHash,
+  }) {
+    final stream = _service.addDownload(
+      title: title,
+      url: url,
+      savePath: savePath,
+      magnetUri: magnetUri,
+      infoHash: infoHash,
+    );
+    _listenToStream(stream);
+    return stream;
+  }
+
+  void _listenToStream(Stream<DownloadTask> stream) {
+    StreamSubscription<DownloadTask>? sub;
+    sub = stream.listen(
+      (task) {
+        final idx = state.indexWhere((t) => t.id == task.id);
+        if (idx >= 0) {
+          state = [...state];
+          state[idx] = task;
+        } else {
+          state = [...state, task];
+        }
+      },
+      onError: (_) {},
+      onDone: () {
+        _persist();
+        if (sub != null) _subscriptions.remove(sub.hashCode.toString());
+      },
+    );
+    _subscriptions[sub.hashCode.toString()] = sub;
   }
 
   void updateTask(DownloadTask updated) {
@@ -98,7 +136,8 @@ class DownloadTasksNotifier extends StateNotifier<List<DownloadTask>> {
   }
 
   void resumeTask(String id) {
-    _service.resume(id);
+    final stream = _service.resume(id);
+    _listenToStream(stream);
     state = state.map((t) {
       if (t.id == id) return t.copyWith(status: DownloadStatus.downloading);
       return t;
@@ -109,6 +148,15 @@ class DownloadTasksNotifier extends StateNotifier<List<DownloadTask>> {
   Future<void> _persist() async {
     await _storage.saveDownloads(state);
   }
+
+  @override
+  void dispose() {
+    for (final sub in _subscriptions.values) {
+      sub.cancel();
+    }
+    _subscriptions.clear();
+    super.dispose();
+  }
 }
 
 final searchResultProvider = StateNotifierProvider<SearchResultNotifier, SearchResult>((ref) {
@@ -117,15 +165,24 @@ final searchResultProvider = StateNotifierProvider<SearchResultNotifier, SearchR
 
 class SearchResultNotifier extends StateNotifier<SearchResult> {
   final TorrentSearchService _service;
+  bool _disposed = false;
 
   SearchResultNotifier(this._service) : super(const SearchResult());
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
 
   Future<void> search(String query) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final results = await _service.search(query);
+      if (_disposed) return;
       state = SearchResult(results: results, hasMore: results.length >= 100);
     } catch (e) {
+      if (_disposed) return;
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
@@ -134,8 +191,10 @@ class SearchResultNotifier extends StateNotifier<SearchResult> {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final results = await _service.getTopTorrents();
+      if (_disposed) return;
       state = SearchResult(results: results, hasMore: false);
     } catch (e) {
+      if (_disposed) return;
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
@@ -157,7 +216,9 @@ class SearchHistoryNotifier extends StateNotifier<List<String>> {
   }
 
   Future<void> _load() async {
-    state = await _storage.loadSearchHistory();
+    final history = await _storage.loadSearchHistory();
+    if (!mounted) return;
+    state = history;
   }
 
   Future<void> addQuery(String query) async {

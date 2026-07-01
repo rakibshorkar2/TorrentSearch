@@ -23,6 +23,21 @@ class TorrentInfo {
     this.fileUrl,
   });
 
+  factory TorrentInfo.fromJson(Map<String, dynamic> json) {
+    return TorrentInfo(
+      id: (json['id'] ?? '').toString(),
+      title: (json['name'] ?? json['title'] ?? 'Unknown').toString(),
+      magnetUri: json['magnet']?.toString(),
+      infoHash: json['info_hash']?.toString(),
+      size: int.tryParse(json['size']?.toString() ?? '0') ?? 0,
+      seeders: int.tryParse(json['seeders']?.toString() ?? '0') ?? 0,
+      leechers: int.tryParse(json['leechers']?.toString() ?? '0') ?? 0,
+      uploadDate: DateTime.tryParse(json['added']?.toString() ?? '') ?? DateTime.now(),
+      category: json['category']?.toString(),
+      fileUrl: json['download_url']?.toString(),
+    );
+  }
+
   String get formattedSize => _formatBytes(size);
   String get health => seeders > 0
       ? (leechers > 0 ? (seeders / leechers).toStringAsFixed(1) : 'Excellent')
@@ -105,7 +120,7 @@ class DownloadTask {
   String get formattedTotal => _formatBytes(totalSize);
   String get formattedSpeed => '${_formatBytes(downloadSpeed)}/s';
   String get formattedUploadSpeed => '${_formatBytes(uploadSpeed)}/s';
-  String get remainingFormatted => _formatBytes(totalSize - downloadedBytes);
+  String get remainingFormatted => _formatBytes((totalSize - downloadedBytes).clamp(0, totalSize));
 
   DownloadTask copyWith({
     String? id,

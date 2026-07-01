@@ -5,10 +5,10 @@ import Network
 
 class TorrentFlowNativeService: NSObject {
   private var channel: FlutterMethodChannel
-  private var backgroundSessionIdentifier = "com.torrentflow.bg"
+  private let backgroundSessionPrefix = "com.torrentflow.bg"
   private var networkMonitor: NWPathMonitor?
   private var isWifiConnected = true
-  private var backgroundCompletionHandler: (() -> Void)?
+  private var backgroundCompletionHandlers: [String: () -> Void] = [:]
 
   init(messenger: FlutterBinaryMessenger) {
     self.channel = FlutterMethodChannel(name: "com.torrentflow/native", binaryMessenger: messenger)
@@ -154,8 +154,11 @@ class TorrentFlowNativeService: NSObject {
       return
     }
 
+    let taskId = (args["taskId"] as? String) ?? UUID().uuidString
+    let identifier = "\(backgroundSessionPrefix).\(taskId)"
+
     let config = URLSessionConfiguration
-      .background(withIdentifier: "\(backgroundSessionIdentifier).\(Date().timeIntervalSince1970)")
+      .background(withIdentifier: identifier)
     config.sessionSendsLaunchEvents = true
     config.isDiscretionary = false
 
@@ -165,7 +168,7 @@ class TorrentFlowNativeService: NSObject {
   }
 
   func handleBackgroundURLSession(identifier: String, completionHandler: @escaping () -> Void) {
-    backgroundCompletionHandler = completionHandler
+    backgroundCompletionHandlers[identifier] = completionHandler
     _ = URLSession(
       configuration: URLSessionConfiguration.background(withIdentifier: identifier),
       delegate: self, delegateQueue: nil)
@@ -183,14 +186,31 @@ extension TorrentFlowNativeService: URLSessionDownloadDelegate {
       .appendingPathComponent(downloadTask.originalRequest?.url?.lastPathComponent ?? "download")
     try? FileManager.default.removeItem(at: destination)
     try? FileManager.default.moveItem(at: location, to: destination)
+
+    // Notify Dart layer about completion
+    let taskId = session.configuration.identifier?
+      .replacingOccurrences(of: "\(backgroundSessionPrefix).", with: "") ?? ""
+    channel.invokeMethod("backgroundDownloadComplete", arguments: [
+      "taskId": taskId,
+      "destination": destination.path,
+    ])
   }
 
   func urlSession(_ session: URLSession,
                   task: URLSessionTask,
                   didCompleteWithError error: Error?) {
-    if let handler = backgroundCompletionHandler {
+    let identifier = session.configuration.identifier ?? ""
+    if let handler = backgroundCompletionHandlers.removeValue(forKey: identifier) {
       handler()
-      backgroundCompletionHandler = nil
+    }
+
+    if let error = error {
+      let taskId = identifier
+        .replacingOccurrences(of: "\(backgroundSessionPrefix).", with: "")
+      channel.invokeMethod("backgroundDownloadComplete", arguments: [
+        "taskId": taskId,
+        "error": error.localizedDescription,
+      ])
     }
   }
 }

@@ -35,20 +35,22 @@ class _FileBrowserScreenState extends ConsumerState<FileBrowserScreen> {
     try {
       final dir = Directory(path);
       if (await dir.exists()) {
-        final entities = dir.listSync();
+        final entities = await dir.list().toList();
         entities.sort((a, b) {
           if (a is Directory && b is! Directory) return -1;
           if (a is! Directory && b is Directory) return 1;
           return a.path.compareTo(b.path);
         });
-        setState(() {
-          _currentPath = path;
-          _entities = entities;
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _currentPath = path;
+            _entities = entities;
+            _isLoading = false;
+          });
+        }
       }
     } catch (_) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -108,7 +110,7 @@ class _FileBrowserScreenState extends ConsumerState<FileBrowserScreen> {
                           } else {
                             showCupertinoModalPopup(
                               context: context,
-                              builder: (ctx) => _FileOptionsSheet(entity: entity, isDark: isDark),
+                              builder: (ctx) => _FileOptionsSheet(entity: entity, isDark: isDark, refresh: _refreshCurrent),
                             );
                           }
                         },
@@ -118,6 +120,8 @@ class _FileBrowserScreenState extends ConsumerState<FileBrowserScreen> {
       ),
     );
   }
+
+  void _refreshCurrent() => _navigateTo(_currentPath);
 
   String _getFolderName() {
     final parts = _currentPath.split(Platform.pathSeparator);
@@ -140,13 +144,9 @@ class _FileEntityTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDir = entity is Directory;
     final name = entity.path.split(Platform.pathSeparator).last;
-    IconData icon;
-    if (isDir) {
-      icon = CupertinoIcons.folder;
-    } else {
-      final ext = name.contains('.') ? name.split('.').last.toLowerCase() : '';
-      icon = _iconForExtension(ext);
-    }
+    final icon = isDir
+        ? CupertinoIcons.folder
+        : _iconForExtension(name.contains('.') ? name.split('.').last.toLowerCase() : '');
 
     return GlassCard(
       onTap: onTap,
@@ -178,26 +178,15 @@ class _FileEntityTile extends StatelessWidget {
 
   IconData _iconForExtension(String ext) {
     switch (ext) {
-      case 'mp4':
-      case 'mov':
-      case 'avi':
-      case 'mkv':
+      case 'mp4': case 'mov': case 'avi': case 'mkv':
         return CupertinoIcons.play_circle;
-      case 'mp3':
-      case 'wav':
-      case 'flac':
+      case 'mp3': case 'wav': case 'flac':
         return CupertinoIcons.music_note;
-      case 'jpg':
-      case 'jpeg':
-      case 'png':
-      case 'gif':
+      case 'jpg': case 'jpeg': case 'png': case 'gif':
         return CupertinoIcons.photo;
       case 'pdf':
         return CupertinoIcons.doc_text;
-      case 'zip':
-      case 'rar':
-      case 'tar':
-      case 'gz':
+      case 'zip': case 'rar': case 'tar': case 'gz':
         return CupertinoIcons.archivebox;
       case 'torrent':
         return CupertinoIcons.link;
@@ -210,8 +199,13 @@ class _FileEntityTile extends StatelessWidget {
 class _FileOptionsSheet extends StatelessWidget {
   final FileSystemEntity entity;
   final bool isDark;
+  final VoidCallback refresh;
 
-  const _FileOptionsSheet({required this.entity, required this.isDark});
+  const _FileOptionsSheet({
+    required this.entity,
+    required this.isDark,
+    required this.refresh,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -241,21 +235,24 @@ class _FileOptionsSheet extends StatelessWidget {
             child: Text(entity.path.split(Platform.pathSeparator).last,
               style: TorrentFlowTheme.title3, maxLines: 2, overflow: TextOverflow.ellipsis),
           ),
-          CupertinoButton(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            onPressed: () => Navigator.of(context).pop(),
-            child: Row(
-              children: [
-                const Icon(CupertinoIcons.share),
-                const SizedBox(width: 12),
-                const Text('Share'),
-              ],
-            ),
-          ),
-          if (entity is File)
+          if (entity is File) ...[
             CupertinoButton(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               onPressed: () => Navigator.of(context).pop(),
+              child: Row(
+                children: [
+                  const Icon(CupertinoIcons.share),
+                  const SizedBox(width: 12),
+                  const Text('Share'),
+                ],
+              ),
+            ),
+            CupertinoButton(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              onPressed: () {
+                Navigator.of(context).pop();
+                if (entity is File) _previewFile(context, entity as File);
+              },
               child: Row(
                 children: [
                   const Icon(CupertinoIcons.eye),
@@ -264,9 +261,13 @@ class _FileOptionsSheet extends StatelessWidget {
                 ],
               ),
             ),
+          ],
           CupertinoButton(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () {
+              Navigator.of(context).pop();
+              _renameEntity(context, entity);
+            },
             child: Row(
               children: [
                 const Icon(CupertinoIcons.pencil),
@@ -277,7 +278,10 @@ class _FileOptionsSheet extends StatelessWidget {
           ),
           CupertinoButton(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () {
+              Navigator.of(context).pop();
+              _deleteEntity(context, entity);
+            },
             child: Row(
               children: [
                 const Icon(CupertinoIcons.trash, color: TorrentFlowTheme.error),
@@ -285,6 +289,81 @@ class _FileOptionsSheet extends StatelessWidget {
                 Text('Delete', style: TextStyle(color: TorrentFlowTheme.error)),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _previewFile(BuildContext context, File file) {
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Preview'),
+        content: Text('Preview not yet implemented for: ${file.path.split(Platform.pathSeparator).last}'),
+        actions: [
+          CupertinoButton(
+            child: const Text('OK'),
+            onPressed: () => Navigator.of(ctx).pop(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _renameEntity(BuildContext context, FileSystemEntity entity) {
+    final name = entity.path.split(Platform.pathSeparator).last;
+    final controller = TextEditingController(text: name);
+
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Rename'),
+        content: CupertinoTextField(
+          controller: controller,
+          autofocus: true,
+        ),
+        actions: [
+          CupertinoButton(
+            child: const Text('Cancel'),
+            onPressed: () => Navigator.of(ctx).pop(),
+          ),
+          CupertinoButton(
+            child: const Text('Rename'),
+            onPressed: () {
+              final newName = controller.text.trim();
+              if (newName.isNotEmpty && newName != name) {
+                final parent = entity.parent;
+                final newPath = '${parent.path}${Platform.pathSeparator}$newName';
+                entity.rename(newPath);
+                refresh();
+              }
+              Navigator.of(ctx).pop();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _deleteEntity(BuildContext context, FileSystemEntity entity) {
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Delete'),
+        content: Text('Delete ${entity.path.split(Platform.pathSeparator).last}?'),
+        actions: [
+          CupertinoButton(
+            child: const Text('Cancel'),
+            onPressed: () => Navigator.of(ctx).pop(),
+          ),
+          CupertinoButton(
+            child: Text('Delete', style: const TextStyle(color: TorrentFlowTheme.error)),
+            onPressed: () {
+              entity.delete(recursive: entity is Directory);
+              refresh();
+              Navigator.of(ctx).pop();
+            },
           ),
         ],
       ),

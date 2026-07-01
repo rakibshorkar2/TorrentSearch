@@ -2,7 +2,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/glass_card.dart';
+import '../../../models/seedr_item.dart';
 import '../../../providers/app_providers.dart';
+
 
 class SeedrScreen extends ConsumerStatefulWidget {
   const SeedrScreen({super.key});
@@ -15,6 +17,58 @@ class _SeedrScreenState extends ConsumerState<SeedrScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoggingIn = false;
+  bool _isLoggedIn = false;
+  bool _isLoadingContents = false;
+  String? _error;
+  List<SeedrItem> _items = [];
+  SeedrItem? _currentFolder;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkLogin();
+  }
+
+  Future<void> _checkLogin() async {
+    final service = ref.read(seedrServiceProvider);
+    final loggedIn = await service.isLoggedIn();
+    if (mounted) {
+      setState(() => _isLoggedIn = loggedIn);
+      if (loggedIn) _loadContents();
+    }
+  }
+
+  Future<void> _loadContents({int? folderId}) async {
+    setState(() {
+      _isLoadingContents = true;
+      _error = null;
+    });
+    try {
+      final service = ref.read(seedrServiceProvider);
+      final items = await service.listContents(folderId: folderId);
+      if (mounted) {
+        setState(() {
+          _items = items;
+          _isLoadingContents = false;
+          if (folderId != null) {
+            _currentFolder = _items.isNotEmpty ? _items.firstWhere(
+              (i) => i.id == folderId.toString(),
+              orElse: () => _currentFolder!,
+            ) : null;
+          } else {
+            _currentFolder = null;
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _isLoadingContents = false;
+        });
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -29,7 +83,7 @@ class _SeedrScreenState extends ConsumerState<SeedrScreen> {
 
     return CupertinoPageScaffold(
       navigationBar: CupertinoNavigationBar(
-        middle: Text('Seedr', style: TorrentFlowTheme.headline.copyWith(
+        middle: Text(_currentFolder?.name ?? 'Seedr', style: TorrentFlowTheme.headline.copyWith(
           color: isDark ? TorrentFlowTheme.darkText : TorrentFlowTheme.lightText,
         )),
         backgroundColor: isDark
@@ -39,9 +93,16 @@ class _SeedrScreenState extends ConsumerState<SeedrScreen> {
           color: isDark ? TorrentFlowTheme.darkSeparator : TorrentFlowTheme.lightSeparator,
           width: 0.5,
         )),
+        leading: _currentFolder != null
+            ? CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: () => _loadContents(),
+                child: Icon(CupertinoIcons.chevron_left, color: TorrentFlowTheme.accent),
+              )
+            : null,
       ),
       child: SafeArea(
-        child: _buildLoginView(isDark),
+        child: _isLoggedIn ? _buildContentView(isDark) : _buildLoginView(isDark),
       ),
     );
   }
@@ -53,8 +114,7 @@ class _SeedrScreenState extends ConsumerState<SeedrScreen> {
         const SizedBox(height: 40),
         Center(
           child: Container(
-            width: 80,
-            height: 80,
+            width: 80, height: 80,
             decoration: BoxDecoration(
               color: TorrentFlowTheme.accent.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(20),
@@ -128,6 +188,67 @@ class _SeedrScreenState extends ConsumerState<SeedrScreen> {
     );
   }
 
+  Widget _buildContentView(bool isDark) {
+    if (_isLoadingContents) {
+      return const Center(child: CupertinoActivityIndicator());
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(CupertinoIcons.exclamationmark_triangle, size: 48,
+              color: TorrentFlowTheme.error),
+            const SizedBox(height: 12),
+            Text(_error!, style: TorrentFlowTheme.body.copyWith(color: TorrentFlowTheme.error)),
+            const SizedBox(height: 16),
+            CupertinoButton(
+              onPressed: _loadContents,
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_items.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(CupertinoIcons.cloud, size: 48,
+              color: isDark ? TorrentFlowTheme.darkTextSecondary : TorrentFlowTheme.lightTextSecondary),
+            const SizedBox(height: 12),
+            Text('No files in Seedr',
+              style: TorrentFlowTheme.body.copyWith(
+                color: isDark ? TorrentFlowTheme.darkTextSecondary : TorrentFlowTheme.lightTextSecondary),
+            ),
+            const SizedBox(height: 16),
+            CupertinoButton(
+              onPressed: _loadContents,
+              child: const Text('Refresh'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return CupertinoButton(
+      padding: const EdgeInsets.all(16),
+      onPressed: () async {
+        final service = ref.read(seedrServiceProvider);
+        await service.logout();
+        setState(() {
+          _isLoggedIn = false;
+          _items = [];
+          _currentFolder = null;
+        });
+      },
+      child: const Text('Log Out'),
+    );
+  }
+
   Future<void> _login() async {
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) return;
     setState(() => _isLoggingIn = true);
@@ -137,7 +258,8 @@ class _SeedrScreenState extends ConsumerState<SeedrScreen> {
         _passwordController.text,
       );
       if (mounted) {
-        _showSuccess();
+        setState(() => _isLoggedIn = true);
+        _loadContents();
       }
     } catch (e) {
       if (mounted) {
@@ -158,21 +280,5 @@ class _SeedrScreenState extends ConsumerState<SeedrScreen> {
     } finally {
       if (mounted) setState(() => _isLoggingIn = false);
     }
-  }
-
-  void _showSuccess() {
-    showCupertinoDialog(
-      context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('Connected'),
-        content: const Text('Successfully logged in to Seedr.'),
-        actions: [
-          CupertinoButton(
-            child: const Text('OK'),
-            onPressed: () => Navigator.of(ctx).pop(),
-          ),
-        ],
-      ),
-    );
   }
 }

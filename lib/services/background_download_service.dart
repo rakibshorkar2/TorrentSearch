@@ -14,6 +14,7 @@ class BackgroundDownloadService {
   bool _isInitialized = false;
   Timer? _keepAliveTimer;
   StreamSubscription<Duration>? _foregroundSubscription;
+  final Map<String, DownloadTask> _pendingBackgroundTasks = {};
 
   BackgroundDownloadService(this._downloadService, this._ref);
 
@@ -24,8 +25,6 @@ class BackgroundDownloadService {
     if (await _native.requestNotificationPermission()) {
       await _native.enableBackgroundMode();
     }
-
-    _native.getDeviceModel().then((_) {});
 
     _startKeepAlive();
   }
@@ -40,13 +39,8 @@ class BackgroundDownloadService {
     final tasks = _downloadService.getTasks();
     final activeTasks = tasks.where((t) => t.status == DownloadStatus.downloading).toList();
 
-    if (activeTasks.isEmpty) {
-      // No active torrents - check network to keep connectivity alive
-      await _native.getNetworkStatus();
-      return;
-    }
+    if (activeTasks.isEmpty) return;
 
-    // Notify about active downloads in background
     for (final task in activeTasks) {
       if (task.progress > 0 && task.progress < 1) {
         await _native.showLocalNotification(
@@ -57,7 +51,6 @@ class BackgroundDownloadService {
       }
     }
 
-    // If WiFi-only mode, check connection
     final settings = _ref.read(settingsProvider);
     if (settings.wifiOnly) {
       final isWifi = await _native.isWifiConnected();
@@ -74,13 +67,17 @@ class BackgroundDownloadService {
     required String url,
     required String destination,
   }) async {
-    final taskId = 'seedr_${DateTime.now().millisecondsSinceEpoch}';
+    final provider = _ref.read(downloadTasksProvider.notifier);
+    final stream = provider.addDownload(
+      title: title,
+      url: url,
+      savePath: destination,
+    );
 
-    if (_downloadService.getTasks().length >= _ref.read(settingsProvider).maxConcurrentDownloads) {
-      throw Exception('Maximum concurrent downloads reached');
-    }
+    final taskId = await stream.first.then((t) => t.id);
 
-    // Use Background URLSession for HTTP downloads from Seedr
+    _pendingBackgroundTasks[taskId] = _downloadService.getTask(taskId)!;
+
     await _native.scheduleBackgroundDownload(
       url: url,
       destination: destination,
@@ -91,6 +88,24 @@ class BackgroundDownloadService {
       title: 'Download Started',
       body: title,
     );
+  }
+
+  void handleBackgroundDownloadComplete(String taskId, {String? error}) {
+    final task = _pendingBackgroundTasks.remove(taskId);
+    if (task == null) return;
+
+    if (error != null) {
+      _downloadService.remove(taskId);
+      notifyDownloadError(task.title, error);
+    } else {
+      final completedTask = task.copyWith(
+        status: DownloadStatus.completed,
+        progress: 1.0,
+        completedAt: DateTime.now(),
+      );
+      _ref.read(downloadTasksProvider.notifier).updateTask(completedTask);
+      notifyDownloadComplete(task.title);
+    }
   }
 
   Future<void> notifyDownloadComplete(String title) async {

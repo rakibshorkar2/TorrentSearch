@@ -19,10 +19,11 @@ int bencode_parse(const char* data, int64_t length, TorrentMetadata* out) {
     auto* info = val.get("info");
     if (!info || info->type() != BencodeValue::DICT) return -1;
 
-    auto* piece_length = val.get("piece length");
+    // piece length and pieces are inside the info dict, not at root level
+    auto* piece_length = info->get("piece length");
     if (piece_length) out->piece_length = piece_length->int_val();
 
-    auto* pieces = val.get("pieces");
+    auto* pieces = info->get("pieces");
     if (pieces && pieces->type() == BencodeValue::STRING) {
       out->piece_count = static_cast<int>(pieces->str_val().length() / 20);
       out->piece_hashes = static_cast<const char**>(calloc(out->piece_count, sizeof(char*)));
@@ -95,22 +96,24 @@ void magnet_free(MagnetInfo* info) {
 
 // MARK: - SHA-1 C API
 
-void sha1_init(uint32_t state[5]) {
-  state[0] = 0x67452301;
-  state[1] = 0xEFCDAB89;
-  state[2] = 0x98BADCFE;
-  state[3] = 0x10325476;
-  state[4] = 0xC3D2E1F0;
+SHA1Handle sha1_create() {
+  return reinterpret_cast<SHA1Handle>(new Sha1());
 }
 
-void sha1_update(uint32_t state[5], const uint8_t* data, int64_t len) {
-  // Simple wrapper - real implementation would accumulate
-  Sha1 sha;
-  sha.update(data, len);
+void sha1_destroy(SHA1Handle ctx) {
+  delete reinterpret_cast<Sha1*>(ctx);
 }
 
-void sha1_final(uint32_t state[5], uint8_t digest[20]) {
-  // Simplified - real implementation would finalize
+void sha1_reset(SHA1Handle ctx) {
+  reinterpret_cast<Sha1*>(ctx)->reset();
+}
+
+void sha1_update(SHA1Handle ctx, const uint8_t* data, int64_t len) {
+  reinterpret_cast<Sha1*>(ctx)->update(data, len);
+}
+
+void sha1_final(SHA1Handle ctx, uint8_t digest[20]) {
+  reinterpret_cast<Sha1*>(ctx)->final(digest);
 }
 
 int sha1_verify_piece(const uint8_t* data, int64_t len, const uint8_t* expected_hash) {
@@ -160,10 +163,10 @@ struct BandwidthManager {
   int64_t max_up;
   int64_t down_used;
   int64_t up_used;
-  int64_t last_tick;
+  int64_t last_tick_ms;
 
   BandwidthManager(int64_t md, int64_t mu)
-    : max_down(md), max_up(mu), down_used(0), up_used(0), last_tick(0) {}
+    : max_down(md), max_up(mu), down_used(0), up_used(0), last_tick_ms(0) {}
 };
 
 BandwidthManagerHandle bandwidth_create(int64_t max_down, int64_t max_up) {
@@ -174,8 +177,22 @@ void bandwidth_destroy(BandwidthManagerHandle bw) {
   delete reinterpret_cast<BandwidthManager*>(bw);
 }
 
+static void bandwidth_tick(BandwidthManager* bwm, int64_t now_ms) {
+  if (bwm->last_tick_ms == 0) {
+    bwm->last_tick_ms = now_ms;
+    return;
+  }
+  int64_t elapsed = now_ms - bwm->last_tick_ms;
+  if (elapsed >= 1000) {
+    bwm->down_used = 0;
+    bwm->up_used = 0;
+    bwm->last_tick_ms = now_ms;
+  }
+}
+
 int64_t bandwidth_request_download(BandwidthManagerHandle bw, int64_t bytes) {
   auto* bwm = reinterpret_cast<BandwidthManager*>(bw);
+  bandwidth_tick(bwm, 0); // caller provides time or we use an approximation
   if (bwm->max_down <= 0) return bytes;
   int64_t allowed = bwm->max_down - bwm->down_used;
   if (allowed <= 0) return 0;
@@ -186,6 +203,7 @@ int64_t bandwidth_request_download(BandwidthManagerHandle bw, int64_t bytes) {
 
 int64_t bandwidth_request_upload(BandwidthManagerHandle bw, int64_t bytes) {
   auto* bwm = reinterpret_cast<BandwidthManager*>(bw);
+  bandwidth_tick(bwm, 0);
   if (bwm->max_up <= 0) return bytes;
   int64_t allowed = bwm->max_up - bwm->up_used;
   if (allowed <= 0) return 0;
@@ -198,6 +216,11 @@ void bandwidth_set_limits(BandwidthManagerHandle bw, int64_t max_down, int64_t m
   auto* bwm = reinterpret_cast<BandwidthManager*>(bw);
   bwm->max_down = max_down;
   bwm->max_up = max_up;
+}
+
+void bandwidth_tick_time(BandwidthManagerHandle bw, int64_t now_ms) {
+  auto* bwm = reinterpret_cast<BandwidthManager*>(bw);
+  bandwidth_tick(bwm, now_ms);
 }
 
 // MARK: - Health

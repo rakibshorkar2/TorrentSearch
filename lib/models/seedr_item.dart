@@ -76,6 +76,41 @@ class SeedrFile {
   }
 }
 
+enum SeedrItemType { folder, file, torrent }
+
+class SeedrItem {
+  final String id;
+  final String name;
+  final int size;
+  final SeedrItemType type;
+  final int progress;
+  final String? downloadUrl;
+  final int fileCount;
+
+  const SeedrItem({
+    required this.id,
+    required this.name,
+    required this.size,
+    required this.type,
+    this.progress = 0,
+    this.downloadUrl,
+    this.fileCount = 0,
+  });
+
+  String get formattedSize => _formatBytes(size);
+  String get formattedProgress => '$progress%';
+  bool get isFolder => type == SeedrItemType.folder;
+
+  static String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    if (bytes < 1024 * 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
+  }
+}
+
 class SeedrTorrent {
   final String id;
   final String name;
