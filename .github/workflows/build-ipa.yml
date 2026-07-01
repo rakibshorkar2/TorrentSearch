@@ -21,24 +21,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Flutter
+      - name: Setup Flutter (cached)
         uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
+          cache: true
 
-      - name: Cache Flutter dependencies
+      - name: Cache pub dependencies
         uses: actions/cache@v4
+        id: cache-pub
         with:
-          path: |
-            ~/.pub-cache
-            .dart_tool
-          key: ${{ runner.os }}-pub-${{ hashFiles('pubspec.yaml', 'pubspec.lock') }}
+          path: ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('pubspec.lock') }}
           restore-keys: |
             ${{ runner.os }}-pub-
 
       - name: Install dependencies
-        run: flutter pub get
+        run: flutter pub get ${{ steps.cache-pub.outputs.cache-hit == 'true' && '--offline' || '' }}
 
       - name: Build C++ native engine
         run: |
