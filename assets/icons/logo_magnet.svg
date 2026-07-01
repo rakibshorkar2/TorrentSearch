@@ -1,0 +1,23 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg_dark" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1A1A1A"/>
+      <stop offset="1" stop-color="#000000"/>
+    </linearGradient>
+    <linearGradient id="magnet_grad" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#FF3B30"/>
+      <stop offset="1" stop-color="#FF9500"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="1024" height="1024" rx="220" fill="url(#bg_dark)"/>
+
+  <!-- Magnet Shape -->
+  <path d="M300 300V550C300 667 395 762 512 762C629 762 724 667 724 550V300H624V550C624 612 574 662 512 662C450 662 400 612 400 550V300H300Z" fill="url(#magnet_grad)"/>
+
+  <!-- Glass Overlay for Magnet -->
+  <path d="M300 300V550C300 667 395 762 512 762C629 762 724 667 724 550V300H624V550C624 612 574 662 512 662C450 662 400 612 400 550V300H300Z" fill="white" fill-opacity="0.1"/>
+
+  <!-- Flow Arrow -->
+  <path d="M512 250V600M512 600L450 538M512 600L574 538" stroke="white" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
