@@ -6,8 +6,8 @@
 PieceManager::PieceManager(int64_t total_size, int64_t piece_size)
   : total_size_(total_size), piece_size_(piece_size) {
 
-  piece_count_ = (total_size_ + piece_size_ - 1) / piece_size_;
-  blocks_per_piece_ = (piece_size_ + BLOCK_SIZE - 1) / BLOCK_SIZE;
+  piece_count_ = static_cast<int>((total_size_ + piece_size_ - 1) / piece_size_);
+  blocks_per_piece_ = static_cast<int>((piece_size_ + BLOCK_SIZE - 1) / BLOCK_SIZE);
 
   pieces_.reserve(piece_count_);
   for (int i = 0; i < piece_count_; i++) {

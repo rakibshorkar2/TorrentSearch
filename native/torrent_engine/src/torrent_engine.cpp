@@ -24,7 +24,7 @@ int bencode_parse(const char* data, int64_t length, TorrentMetadata* out) {
 
     auto* pieces = val.get("pieces");
     if (pieces && pieces->type() == BencodeValue::STRING) {
-      out->piece_count = pieces->str_val().length() / 20;
+      out->piece_count = static_cast<int>(pieces->str_val().length() / 20);
       out->piece_hashes = static_cast<const char**>(calloc(out->piece_count, sizeof(char*)));
       for (int i = 0; i < out->piece_count; i++) {
         auto* hash = static_cast<char*>(malloc(20));
