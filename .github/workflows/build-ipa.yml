@@ -54,7 +54,7 @@ jobs:
           cp build/ios/Release-iphoneos/libtorrent_engine.a ../ios/Runner/
 
       - name: Patch Xcode project with native sources
-        run: python3 native/patch_xcode.py
+        run: ruby native/patch_xcode.rb
 
       - name: Build unsigned IPA
         run: |
