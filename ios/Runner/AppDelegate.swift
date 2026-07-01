@@ -17,9 +17,10 @@ import UserNotifications
 
     let result = super.application(application, didFinishLaunchingWithOptions: launchOptions)
 
-    if let controller = window?.rootViewController as? FlutterViewController {
-      nativeService = TorrentFlowNativeService(messenger: controller.binaryMessenger)
+    if let messenger = engine?.binaryMessenger {
+      nativeService = TorrentFlowNativeService(messenger: messenger)
     }
+
     return result
   }
 
