@@ -17,8 +17,8 @@ final screenAwakeProvider = Provider<ScreenAwakeController>((ref) {
   final controller = ScreenAwakeController();
   final settings = ref.read(settingsProvider);
   controller.update(settings);
-  ref.listen(settingsProvider, (_, next) {
-    controller.update(next);
+  ref.listen(settingsProvider, (_, next) async {
+    await controller.update(next);
   });
   ref.onDispose(() => controller.dispose());
   return controller;
@@ -28,8 +28,15 @@ class ScreenAwakeController {
   Timer? _timer;
   Timer? _watchdog;
   DateTime? _expiresAt;
+  Future<void>? _lastUpdate;
 
-  void update(AppSettings settings) {
+  Future<void> update(AppSettings settings) async {
+    await _lastUpdate;
+    _lastUpdate = _doUpdate(settings);
+    return _lastUpdate;
+  }
+
+  Future<void> _doUpdate(AppSettings settings) async {
     _timer?.cancel();
     _expiresAt = null;
 
@@ -37,13 +44,13 @@ class ScreenAwakeController {
       if (settings.screenAwakeMinutes != null && settings.screenAwakeMinutes! > 0) {
         final duration = Duration(minutes: settings.screenAwakeMinutes!);
         _expiresAt = DateTime.now().add(duration);
-        WakelockPlus.enable();
+        await WakelockPlus.enable();
         _startWatchdog();
         _timer = Timer(duration, () {
           _disableWakeLock();
         });
       } else {
-        _disableWakeLock();
+        await _disableWakeLock();
       }
     } catch (e) {
       appLogger.e('Screen awake error', error: e);
@@ -59,14 +66,14 @@ class ScreenAwakeController {
     });
   }
 
-  void _disableWakeLock() {
+  Future<void> _disableWakeLock() async {
     _timer?.cancel();
     _timer = null;
     _watchdog?.cancel();
     _watchdog = null;
     _expiresAt = null;
     try {
-      WakelockPlus.disable();
+      await WakelockPlus.disable();
     } catch (_) {}
   }
 
