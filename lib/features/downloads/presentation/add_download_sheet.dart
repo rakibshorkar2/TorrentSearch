@@ -120,7 +120,7 @@ class _AddDownloadSheetState extends ConsumerState<AddDownloadSheet> {
                     Icon(CupertinoIcons.info_circle, size: 16, color: TorrentFlowTheme.warning),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text('Direct download unavailable. Use Seedr cloud or copy the magnet link.',
+                      child: Text('Downloading via magnet link. Peer-to-peer download will begin.',
                         style: TorrentFlowTheme.footnote.copyWith(color: TorrentFlowTheme.warning)),
                     ),
                   ],
@@ -173,7 +173,7 @@ class _AddDownloadSheetState extends ConsumerState<AddDownloadSheet> {
                 onPressed: _isAdding ? null : _addDownload,
                 child: _isAdding
                     ? const CupertinoActivityIndicator(color: CupertinoColors.white)
-                    : Text(_hasDirectUrl ? 'Start Download' : 'Add to Downloads (magnet only)'),
+                    : Text('Start Download'),
               ),
             ),
           ),

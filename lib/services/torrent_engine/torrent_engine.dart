@@ -64,7 +64,7 @@ class TorrentStatus {
 
 abstract class TorrentEngine {
   Future<void> initialize({required String savePath});
-  Future<String> addMagnet(String magnetUri, {String? name});
+  Future<String> addMagnet(String magnetUri, {String? name, String? savePath});
   Future<String> addTorrentFile(String filePath, {String? name});
   void remove(String id);
   void pause(String id);

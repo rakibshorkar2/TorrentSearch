@@ -20,11 +20,13 @@ class DevelopmentTorrentEngine implements TorrentEngine {
   }
 
   @override
-  Future<String> addMagnet(String magnetUri, {String? name}) async {
+  Future<String> addMagnet(String magnetUri, {String? name, String? savePath}) async {
     if (!_initialized) throw StateError('Engine not initialized');
     final id = 'torrent_${DateTime.now().millisecondsSinceEpoch}_${_downloaders.length}';
     final downloader = TorrentDownloader();
     _downloaders[id] = downloader;
+
+    final effectiveSavePath = savePath ?? '$_savePath${Platform.pathSeparator}${name ?? 'download'}';
 
     final status = TorrentStatus(
       id: id,
@@ -34,13 +36,12 @@ class DevelopmentTorrentEngine implements TorrentEngine {
     _statuses[id] = status;
     _updateController.add(status);
 
-    final savePath = '$_savePath${Platform.pathSeparator}${name ?? 'download'}';
     final controller = StreamController<DownloadTask>.broadcast();
     _taskControllers[id] = controller;
 
     downloader.download(
       magnetUri: magnetUri,
-      savePath: savePath,
+      savePath: effectiveSavePath,
       taskId: id,
       controller: controller,
     ).then((_) {
@@ -59,7 +60,36 @@ class DevelopmentTorrentEngine implements TorrentEngine {
       _cleanup(id);
     });
 
+    controller.stream.listen((task) {
+      final s = _statuses[id];
+      if (s == null) return;
+      _statuses[id] = s.copyWith(
+        state: _downloadStateToTorrentState(task.status),
+        progress: task.progress,
+        totalDownloaded: task.downloadedBytes,
+        totalSize: task.totalSize,
+      );
+      _updateController.add(_statuses[id]!);
+    });
+
     return id;
+  }
+
+  static TorrentState _downloadStateToTorrentState(DownloadStatus status) {
+    switch (status) {
+      case DownloadStatus.downloading:
+        return TorrentState.downloading;
+      case DownloadStatus.completed:
+        return TorrentState.finished;
+      case DownloadStatus.error:
+        return TorrentState.error;
+      case DownloadStatus.paused:
+        return TorrentState.paused;
+      case DownloadStatus.queued:
+        return TorrentState.queued;
+      default:
+        return TorrentState.downloading;
+    }
   }
 
   @override

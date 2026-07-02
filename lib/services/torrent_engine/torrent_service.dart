@@ -56,9 +56,9 @@ class TorrentService {
     return DevelopmentTorrentEngine();
   }
 
-  Future<String> addMagnet(String magnetUri, {String? name}) async {
+  Future<String> addMagnet(String magnetUri, {String? name, String? savePath}) async {
     await initialize();
-    return engine.addMagnet(magnetUri, name: name);
+    return engine.addMagnet(magnetUri, name: name, savePath: savePath);
   }
 
   Future<String> addTorrentFile(String filePath, {String? name}) async {

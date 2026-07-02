@@ -462,6 +462,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   }
                 },
                 onSendToSeedr: () => _sendToSeedr(torrent),
+                onDownload: () => _startDownload(torrent),
               );
             },
             childCount: result.results.length,
@@ -547,6 +548,38 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       final seedrService = ref.read(seedrServiceProvider);
       await seedrService.addMagnet(torrent.magnetUri!);
       _showToast('Added to Seedr');
+    } catch (e) {
+      _showToast('Error: $e');
+    }
+  }
+
+  Future<void> _startDownload(TorrentInfo torrent) async {
+    final url = torrent.fileUrl?.isNotEmpty == true ? torrent.fileUrl! : torrent.magnetUri;
+    if (url == null || url.isEmpty) return;
+    HapticFeedback.mediumImpact();
+    try {
+      final notifier = ref.read(downloadTasksProvider.notifier);
+      final docsDir = await getApplicationDocumentsDirectory();
+      final downloadsDir = Directory('${docsDir.path}/Downloads');
+      if (!await downloadsDir.exists()) {
+        await downloadsDir.create(recursive: true);
+      }
+      final safeName = torrent.title.replaceAll(RegExp(r'[^\w\s\-.]'), '').trim();
+      final savePath = '${downloadsDir.path}/${safeName.isNotEmpty ? safeName : 'download'}';
+      await notifier.addDownload(
+        title: torrent.title,
+        url: url,
+        savePath: savePath,
+        magnetUri: torrent.magnetUri,
+        infoHash: torrent.infoHash,
+      ).first;
+      ref.read(historyProvider.notifier).addDownload(
+        title: torrent.title,
+        magnetUri: url,
+        infoHash: torrent.infoHash,
+        totalSize: torrent.size,
+      );
+      _showToast('Download started');
     } catch (e) {
       _showToast('Error: $e');
     }
@@ -789,6 +822,7 @@ class _TorrentResultCard extends StatelessWidget {
   final VoidCallback? onLongPress;
   final VoidCallback? onMagnetCopy;
   final VoidCallback? onSendToSeedr;
+  final VoidCallback? onDownload;
 
   const _TorrentResultCard({
     required this.torrent,
@@ -799,6 +833,7 @@ class _TorrentResultCard extends StatelessWidget {
     this.onLongPress,
     this.onMagnetCopy,
     this.onSendToSeedr,
+    this.onDownload,
   });
 
   @override
@@ -878,6 +913,12 @@ class _TorrentResultCard extends StatelessWidget {
                     padding: const EdgeInsets.all(4),
                     onPressed: onSendToSeedr,
                     child: Icon(CupertinoIcons.cloud_upload, size: 16, color: TorrentFlowTheme.accent),
+                  ),
+                if (onDownload != null)
+                  CupertinoButton(
+                    padding: const EdgeInsets.all(4),
+                    onPressed: onDownload,
+                    child: Icon(CupertinoIcons.arrow_down_to_line, size: 16, color: TorrentFlowTheme.success),
                   ),
               ],
             ),

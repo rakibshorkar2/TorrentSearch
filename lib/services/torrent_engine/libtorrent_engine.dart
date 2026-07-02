@@ -204,9 +204,10 @@ class LibTorrentEngine implements TorrentEngine {
   }
 
   @override
-  Future<String> addMagnet(String magnetUri, {String? name}) async {
+  Future<String> addMagnet(String magnetUri, {String? name, String? savePath}) async {
     final uriPtr = magnetUri.toNativeUtf8();
-    final pathPtr = _savePath.toNativeUtf8();
+    final resolved = savePath ?? _savePath;
+    final pathPtr = resolved.toNativeUtf8();
     try {
       final id = _addMagnet(_session, uriPtr, pathPtr);
       if (id < 0) throw Exception('Failed to add magnet');

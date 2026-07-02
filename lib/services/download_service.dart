@@ -150,7 +150,7 @@ class DownloadService {
     final task = _tasks.firstWhere((t) => t.id == id);
 
     final svc = TorrentService.instance;
-    svc.addMagnet(url, name: task.title).then((torrentId) {
+    svc.addMagnet(url, name: task.title, savePath: task.savePath).then((torrentId) {
       _activeEngineIds[id] = torrentId;
       _engineSub ??= svc.updates().listen((status) {
         _handleEngineUpdate(status, controller);

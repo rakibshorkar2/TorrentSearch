@@ -222,11 +222,9 @@ class TorrentDownloader {
   }
 
   Future<void> _writePiece(String path, Uint8List data, int index) async {
-    final file = await File(path).open(mode: FileMode.writeOnlyAppend);
+    final file = await File(path).open(mode: FileMode.writeOnly);
     try {
-      if (index > 0) {
-        await file.setPosition(index * _pieceLength);
-      }
+      await file.setPosition(index * _pieceLength);
       await file.writeFrom(data);
     } finally {
       await file.close();
