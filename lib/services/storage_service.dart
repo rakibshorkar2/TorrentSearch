@@ -7,10 +7,18 @@ import '../core/constants/app_constants.dart';
 import '../logging/app_logger.dart';
 
 class StorageService {
+  static StorageService? _instance;
   late Box<String> _settingsBox;
   late Box<String> _downloadsBox;
   late Box<String> _searchHistoryBox;
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
+
+  StorageService._();
+
+  factory StorageService() {
+    _instance ??= StorageService._();
+    return _instance!;
+  }
 
   Future<void> init() async {
     await Hive.initFlutter();

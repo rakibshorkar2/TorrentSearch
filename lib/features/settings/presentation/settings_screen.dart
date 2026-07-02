@@ -223,6 +223,13 @@ class SettingsScreen extends ConsumerWidget {
               ),
               _Divider(isDark: isDark),
               _SettingTile(
+                icon: CupertinoIcons.person_alt_circle,
+                title: 'Developer',
+                subtitle: 'RAKIB',
+                isDark: isDark,
+              ),
+              _Divider(isDark: isDark),
+              _SettingTile(
                 icon: CupertinoIcons.globe,
                 title: 'Search Sources',
                 subtitle: 'TPB, 1337x, YTS, EZTV, Nyaa.si',

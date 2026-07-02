@@ -13,35 +13,45 @@ final settingsProvider = StateNotifierProvider<SettingsNotifier, AppSettings>((r
   return SettingsNotifier(ref.read(storageServiceProvider));
 });
 
-final screenAwakeProvider = Provider<void>((ref) {
+final screenAwakeProvider = Provider<ScreenAwakeController>((ref) {
+  final controller = ScreenAwakeController();
   ref.listen(settingsProvider, (prev, next) {
-    _updateWakelock(next);
+    controller.update(next);
   });
-  ref.onDispose(() {
-    _cancelTimer();
-    WakelockPlus.disable();
-  });
+  ref.onDispose(() => controller.dispose());
+  return controller;
 });
 
-Timer? _wakelockTimer;
+class ScreenAwakeController {
+  Timer? _timer;
 
-void _updateWakelock(AppSettings settings) {
-  _wakelockTimer?.cancel();
-  _wakelockTimer = null;
-  if (settings.screenAwakeMinutes != null && settings.screenAwakeMinutes! > 0) {
-    WakelockPlus.enable();
-    _wakelockTimer = Timer(Duration(minutes: settings.screenAwakeMinutes!), () {
-      WakelockPlus.disable();
-      _wakelockTimer = null;
-    });
-  } else {
-    WakelockPlus.disable();
+  void update(AppSettings settings) {
+    _timer?.cancel();
+    _timer = null;
+    try {
+      if (settings.screenAwakeMinutes != null && settings.screenAwakeMinutes! > 0) {
+        WakelockPlus.enable();
+        _timer = Timer(Duration(minutes: settings.screenAwakeMinutes!), () {
+          try {
+            WakelockPlus.disable();
+          } catch (_) {}
+          _timer = null;
+        });
+      } else {
+        WakelockPlus.disable();
+      }
+    } catch (e) {
+      appLogger.e('Screen awake error', error: e);
+    }
   }
-}
 
-void _cancelTimer() {
-  _wakelockTimer?.cancel();
-  _wakelockTimer = null;
+  void dispose() {
+    _timer?.cancel();
+    _timer = null;
+    try {
+      WakelockPlus.disable();
+    } catch (_) {}
+  }
 }
 
 class SettingsNotifier extends StateNotifier<AppSettings> {
