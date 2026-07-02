@@ -1,2 +1,2 @@
 #include "Generated.xcconfig"
-OTHER_LDFLAGS=$(inherited) -L"$(PROJECT_DIR)/Runner" -ltorrent_engine
+OTHER_LDFLAGS=$(inherited) -L"$(PROJECT_DIR)/Runner" -ltorrent_ffi

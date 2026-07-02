@@ -24,7 +24,8 @@ class _SeedrScreenState extends ConsumerState<SeedrScreen> {
   String? _error;
   List<SeedrItem> _items = [];
   SeedrItem? _currentFolder;
-  final int _activeAccountIndex = 0;
+  int _activeAccountIndex = 0;
+  bool _showAccountManager = false;
 
   @override
   void dispose() {
@@ -33,7 +34,6 @@ class _SeedrScreenState extends ConsumerState<SeedrScreen> {
     _labelController.dispose();
     super.dispose();
   }
-  bool _showAccountManager = false;
 
   @override
   void initState() {
@@ -42,9 +42,10 @@ class _SeedrScreenState extends ConsumerState<SeedrScreen> {
   }
 
   Future<void> _checkLogin() async {
-    final accountState = ref.read(seedrAccountsProvider);
-    if (accountState.isNotEmpty) {
-      final active = accountState[_activeAccountIndex.clamp(0, accountState.length - 1)];
+    final accounts = ref.read(seedrAccountsProvider);
+    if (accounts.isNotEmpty) {
+      _activeAccountIndex = ref.read(seedrAccountsProvider.notifier).activeAccountIndex;
+      final active = accounts[_activeAccountIndex.clamp(0, accounts.length - 1)];
       if (active.isLoggedIn) {
         setState(() => _isLoggedIn = true);
         _loadContents();
@@ -148,37 +149,52 @@ class _SeedrScreenState extends ConsumerState<SeedrScreen> {
         const SizedBox(height: 16),
         ...List.generate(accounts.length, (i) {
           final account = accounts[i];
-          return GlassCard(
-            margin: const EdgeInsets.only(bottom: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(CupertinoIcons.person_crop_circle,
-                      color: account.isLoggedIn ? TorrentFlowTheme.success : TorrentFlowTheme.darkTextSecondary),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(account.label ?? account.email,
-                            style: TorrentFlowTheme.callout.copyWith(
-                              color: isDark ? TorrentFlowTheme.darkText : TorrentFlowTheme.lightText,
-                            )),
-                          Text(account.email,
-                            style: TorrentFlowTheme.caption1.copyWith(
-                              color: TorrentFlowTheme.darkTextSecondary,
-                            )),
-                        ],
+          final isActive = i == _activeAccountIndex;
+          return GestureDetector(
+            onTap: account.isLoggedIn ? () => _switchToAccount(i) : null,
+            child: GlassCard(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(CupertinoIcons.person_crop_circle,
+                        color: account.isLoggedIn ? TorrentFlowTheme.success : TorrentFlowTheme.darkTextSecondary),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(account.label ?? account.email,
+                                  style: TorrentFlowTheme.callout.copyWith(
+                                    color: isDark ? TorrentFlowTheme.darkText : TorrentFlowTheme.lightText,
+                                  )),
+                                if (isActive) ...[
+                                  const SizedBox(width: 6),
+                                  Icon(CupertinoIcons.checkmark_circle_fill, color: TorrentFlowTheme.accent, size: 14),
+                                ],
+                              ],
+                            ),
+                            Text(account.email,
+                              style: TorrentFlowTheme.caption1.copyWith(
+                                color: TorrentFlowTheme.darkTextSecondary,
+                              )),
+                          ],
+                        ),
                       ),
-                    ),
-                    if (account.isLoggedIn)
-                      Icon(CupertinoIcons.checkmark_circle_fill, color: TorrentFlowTheme.success, size: 20),
-                  ],
-                ),
-                if (account.account != null) ...[
-                  const SizedBox(height: 8),
+                      if (account.isLoggedIn && !isActive)
+                        CupertinoButton(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          onPressed: () => _switchToAccount(i),
+                          child: Text('Switch', style: TextStyle(fontSize: 13, color: TorrentFlowTheme.accent)),
+                        ),
+                    ],
+                  ),
+                  if (account.account != null) ...[
+                    const SizedBox(height: 8),
                     Container(
                       height: 4,
                       decoration: BoxDecoration(
@@ -196,35 +212,35 @@ class _SeedrScreenState extends ConsumerState<SeedrScreen> {
                         ),
                       ),
                     ),
-                  const SizedBox(height: 4),
-                  Text('${account.account!.formattedUsed} / ${account.account!.formattedTotal}',
-                    style: TorrentFlowTheme.caption2.copyWith(color: TorrentFlowTheme.darkTextSecondary)),
-                ],
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    CupertinoButton(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      onPressed: () => _logoutAccount(i),
-                      child: Text('Logout', style: TextStyle(fontSize: 13, color: TorrentFlowTheme.error)),
-                    ),
-                    CupertinoButton(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      onPressed: () => _removeAccount(i),
-                      child: Text('Remove', style: const TextStyle(fontSize: 13, color: TorrentFlowTheme.error)),
-                    ),
+                    const SizedBox(height: 4),
+                    Text('${account.account!.formattedUsed} / ${account.account!.formattedTotal}',
+                      style: TorrentFlowTheme.caption2.copyWith(color: TorrentFlowTheme.darkTextSecondary)),
                   ],
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      if (account.isLoggedIn)
+                        CupertinoButton(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          onPressed: () => _logoutAccount(i),
+                          child: Text('Logout', style: TextStyle(fontSize: 13, color: TorrentFlowTheme.error)),
+                        ),
+                      CupertinoButton(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        onPressed: () => _removeAccount(i),
+                        child: Text('Remove', style: const TextStyle(fontSize: 13, color: TorrentFlowTheme.error)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           );
         }),
         const SizedBox(height: 12),
         CupertinoButton.filled(
-          onPressed: () {
-            setState(() => _showAccountManager = false);
-          },
+          onPressed: _showAddAccountDialog,
           child: const Text('Add Account'),
         ),
         CupertinoButton(
@@ -493,6 +509,92 @@ class _SeedrScreenState extends ConsumerState<SeedrScreen> {
   Future<void> _removeAccount(int index) async {
     final notifier = ref.read(seedrAccountsProvider.notifier);
     await notifier.removeAccount(index);
+    if (index == _activeAccountIndex && _activeAccountIndex >= ref.read(seedrAccountsProvider).length) {
+      _activeAccountIndex = ref.read(seedrAccountsProvider).length - 1;
+    }
+  }
+
+  void _switchToAccount(int index) {
+    final notifier = ref.read(seedrAccountsProvider.notifier);
+    notifier.switchAccount(index);
+    setState(() {
+      _activeAccountIndex = index;
+      _isLoggedIn = true;
+      _items = [];
+    });
+    _loadContents();
+  }
+
+  void _showAddAccountDialog() {
+    final emailCtrl = TextEditingController();
+    final passwordCtrl = TextEditingController();
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Add Seedr Account'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            CupertinoTextField(
+              controller: emailCtrl,
+              placeholder: 'Email',
+              keyboardType: TextInputType.emailAddress,
+              autocorrect: false,
+            ),
+            const SizedBox(height: 12),
+            CupertinoTextField(
+              controller: passwordCtrl,
+              placeholder: 'Password',
+              obscureText: true,
+            ),
+          ],
+        ),
+        actions: [
+          CupertinoButton(
+            child: const Text('Cancel'),
+            onPressed: () {
+              emailCtrl.dispose();
+              passwordCtrl.dispose();
+              Navigator.of(ctx).pop();
+            },
+          ),
+          CupertinoButton(
+            child: const Text('Add'),
+            onPressed: () async {
+              if (emailCtrl.text.isEmpty || passwordCtrl.text.isEmpty) return;
+              Navigator.of(ctx).pop();
+              try {
+                final notifier = ref.read(seedrAccountsProvider.notifier);
+                await notifier.addAccount(emailCtrl.text, passwordCtrl.text);
+                if (mounted) {
+                  setState(() {
+                    _isLoggedIn = true;
+                    _activeAccountIndex = ref.read(seedrAccountsProvider).length - 1;
+                    _showAccountManager = false;
+                  });
+                  _loadContents();
+                }
+              } catch (e) {
+                if (mounted) {
+                  showCupertinoDialog(
+                    context: context,
+                    builder: (ctx2) => CupertinoAlertDialog(
+                      title: const Text('Login Failed'),
+                      content: Text(e.toString()),
+                      actions: [CupertinoButton(child: const Text('OK'), onPressed: () => Navigator.of(ctx2).pop())],
+                    ),
+                  );
+                }
+              } finally {
+                emailCtrl.dispose();
+                passwordCtrl.dispose();
+              }
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _login() async {
@@ -505,6 +607,7 @@ class _SeedrScreenState extends ConsumerState<SeedrScreen> {
         setState(() {
           _isLoggedIn = true;
           _isLoggingIn = false;
+          _activeAccountIndex = ref.read(seedrAccountsProvider).length - 1;
         });
         _loadContents();
       }

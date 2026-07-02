@@ -9,15 +9,15 @@ class NativeTorrentService {
   factory NativeTorrentService() => _instance;
   NativeTorrentService._();
 
-  TorrentEngine? _engine;
+  NativeTorrentBindings? _bindings;
   static const _channel = MethodChannel('com.torrentflow/native');
   BackgroundDownloadCallback? _onBackgroundDownloadComplete;
 
   bool get isAvailable => Platform.isIOS;
 
-  TorrentEngine get engine {
-    _engine ??= TorrentEngine();
-    return _engine!;
+  NativeTorrentBindings get bindings {
+    _bindings ??= NativeTorrentBindings();
+    return _bindings!;
   }
 
   void initialize({BackgroundDownloadCallback? onBackgroundDownloadComplete}) {

@@ -124,6 +124,44 @@ class TorrentInfo {
     if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
+
+  TorrentInfo copyWith({
+    String? id,
+    String? title,
+    String? magnetUri,
+    String? infoHash,
+    int? size,
+    int? seeders,
+    int? leechers,
+    DateTime? uploadDate,
+    String? category,
+    String? fileUrl,
+    String? source,
+    String? quality,
+    bool? isVideo,
+    bool? isAudio,
+    bool? isGame,
+    bool? isApp,
+  }) {
+    return TorrentInfo(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      magnetUri: magnetUri ?? this.magnetUri,
+      infoHash: infoHash ?? this.infoHash,
+      size: size ?? this.size,
+      seeders: seeders ?? this.seeders,
+      leechers: leechers ?? this.leechers,
+      uploadDate: uploadDate ?? this.uploadDate,
+      category: category ?? this.category,
+      fileUrl: fileUrl ?? this.fileUrl,
+      source: source ?? this.source,
+      quality: quality ?? this.quality,
+      isVideo: isVideo ?? this.isVideo,
+      isAudio: isAudio ?? this.isAudio,
+      isGame: isGame ?? this.isGame,
+      isApp: isApp ?? this.isApp,
+    );
+  }
 }
 
 enum DownloadStatus {

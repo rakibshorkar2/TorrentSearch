@@ -4,7 +4,8 @@ import 'package:dio/dio.dart';
 import '../models/torrent.dart';
 import '../core/constants/app_constants.dart';
 import '../logging/app_logger.dart';
-import 'torrent/torrent_downloader.dart';
+import 'torrent_engine/torrent_service.dart';
+import 'torrent_engine/torrent_engine.dart' as engine;
 
 class DownloadService {
   final Dio _dio;
@@ -142,30 +143,78 @@ class DownloadService {
     return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('ftp://');
   }
 
-  final Map<String, TorrentDownloader> _activeTorrentDownloaders = {};
+  StreamSubscription<engine.TorrentStatus>? _engineSub;
 
   void _startMagnetDownload(String id, String url, StreamController<DownloadTask> controller) {
     _updateTaskById(id, status: DownloadStatus.downloading);
     final task = _tasks.firstWhere((t) => t.id == id);
-    final savePath = task.savePath;
 
-    final downloader = TorrentDownloader();
-    _activeTorrentDownloaders[id] = downloader;
-
-    downloader.download(
-      magnetUri: url,
-      savePath: savePath,
-      taskId: id,
-      controller: controller,
-    ).then((_) {
-      _cleanup(id);
+    final svc = TorrentService.instance;
+    svc.addMagnet(url, name: task.title).then((torrentId) {
+      _activeEngineIds[id] = torrentId;
+      _engineSub ??= svc.updates().listen((status) {
+        _handleEngineUpdate(status, controller);
+      });
     }).catchError((error) {
       if (!controller.isClosed) {
         _updateTaskById(id, status: DownloadStatus.error);
         controller.add(_tasks.firstWhere((t) => t.id == id));
       }
-      _cleanup(id);
     });
+  }
+
+  final Map<String, String> _activeEngineIds = {};
+
+  void _handleEngineUpdate(engine.TorrentStatus status, StreamController<DownloadTask> controller) {
+    final taskId = _activeEngineIds.entries
+      .firstWhere(
+        (e) => e.value == status.id,
+        orElse: () => const MapEntry('', ''),
+      ).key;
+    if (taskId.isEmpty) return;
+
+    final engineState = status.state;
+    DownloadStatus dlStatus;
+    switch (engineState) {
+      case engine.TorrentState.downloading:
+        dlStatus = DownloadStatus.downloading;
+        break;
+      case engine.TorrentState.finished:
+      case engine.TorrentState.seeding:
+        dlStatus = DownloadStatus.completed;
+        break;
+      case engine.TorrentState.error:
+        dlStatus = DownloadStatus.error;
+        break;
+      case engine.TorrentState.paused:
+        dlStatus = DownloadStatus.paused;
+        break;
+      case engine.TorrentState.queued:
+      case engine.TorrentState.checking:
+        dlStatus = DownloadStatus.queued;
+        break;
+    }
+
+    _updateTaskById(taskId,
+      status: dlStatus,
+      progress: status.progress,
+      downloadedBytes: status.totalDownloaded,
+      totalSize: status.totalSize,
+      downloadSpeed: status.downloadRate,
+      uploadSpeed: status.uploadRate,
+      peers: status.peers,
+      seeders: status.seeders,
+    );
+
+    if (!controller.isClosed) {
+      final idx = _tasks.indexWhere((t) => t.id == taskId);
+      if (idx >= 0) controller.add(_tasks[idx]);
+    }
+
+    if (dlStatus == DownloadStatus.completed || dlStatus == DownloadStatus.error) {
+      _updateTaskById(taskId, completedAt: DateTime.now());
+      _cleanup(taskId);
+    }
   }
 
   void _ensureDirectory(String path) {
@@ -280,15 +329,18 @@ class DownloadService {
   }
 
   void dispose() {
+    _engineSub?.cancel();
     for (final token in _cancelTokens.values) {
       token.cancel();
     }
     for (final controller in _controllers.values) {
       controller.close();
     }
+    _activeEngineIds.clear();
     _cancelTokens.clear();
     _controllers.clear();
     _tasks.clear();
     _retryCounts.clear();
+    TorrentService.instance.shutdown();
   }
 }
