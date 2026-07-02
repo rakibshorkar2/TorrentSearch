@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/glass_card.dart';
 import '../../../models/torrent.dart';
@@ -490,24 +492,35 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     ];
   }
 
-  void _batchAddDownloads(SearchResult result) {
+  void _batchAddDownloads(SearchResult result) async {
     final notifier = ref.read(downloadTasksProvider.notifier);
+    final docsDir = await getApplicationDocumentsDirectory();
+    final downloadsDir = Directory('${docsDir.path}/Downloads');
+    if (!await downloadsDir.exists()) {
+      await downloadsDir.create(recursive: true);
+    }
+    int added = 0;
     for (final torrent in result.results) {
-      if (_selectedTorrents.contains(torrent.id) && torrent.magnetUri != null) {
+      if (_selectedTorrents.contains(torrent.id)) {
+        final url = torrent.fileUrl?.isNotEmpty == true ? torrent.fileUrl! : torrent.magnetUri;
+        if (url == null || url.isEmpty) continue;
+        final safeName = torrent.title.replaceAll(RegExp(r'[^\w\s\-.]'), '').trim();
+        final savePath = '${downloadsDir.path}/${safeName.isNotEmpty ? safeName : 'download'}';
         notifier.addDownload(
           title: torrent.title,
-          url: torrent.magnetUri!,
-          savePath: '/downloads/${torrent.title.replaceAll(RegExp(r'[^\w\s]'), '')}',
+          url: url,
+          savePath: savePath,
           magnetUri: torrent.magnetUri,
           infoHash: torrent.infoHash,
         );
+        added++;
       }
     }
     setState(() {
       _selectionMode = false;
       _selectedTorrents.clear();
     });
-    _showToast('${_selectedTorrents.length} downloads started');
+    _showToast('$added downloads started');
   }
 
   void _batchSendToSeedr(SearchResult result) async {

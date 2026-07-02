@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../models/app_settings.dart';
@@ -212,6 +214,8 @@ class SettingsScreen extends ConsumerWidget {
                 },
                 isDark: isDark,
               ),
+              _Divider(isDark: isDark),
+              _DownloadPathTile(isDark: isDark),
             ]),
             _SectionHeader(title: 'About', isDark: isDark),
             _SettingsGroup(children: [
@@ -550,6 +554,45 @@ class _SettingTile extends StatelessWidget {
               color: isDark ? TorrentFlowTheme.darkTextSecondary : TorrentFlowTheme.lightTextSecondary),
         ],
       ),
+    );
+  }
+}
+
+class _DownloadPathTile extends StatefulWidget {
+  final bool isDark;
+  const _DownloadPathTile({required this.isDark});
+
+  @override
+  State<_DownloadPathTile> createState() => _DownloadPathTileState();
+}
+
+class _DownloadPathTileState extends State<_DownloadPathTile> {
+  String _path = '';
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPath();
+  }
+
+  Future<void> _loadPath() async {
+    final dir = await getApplicationDocumentsDirectory();
+    if (mounted) {
+      setState(() {
+        _path = '${dir.path}${Platform.pathSeparator}Downloads';
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _SettingTile(
+      icon: CupertinoIcons.folder_open,
+      title: 'Download Location',
+      subtitle: _loading ? 'Loading...' : _path,
+      isDark: widget.isDark,
     );
   }
 }

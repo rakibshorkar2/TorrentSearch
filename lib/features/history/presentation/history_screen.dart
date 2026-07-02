@@ -15,6 +15,15 @@ class HistoryScreen extends ConsumerStatefulWidget {
 
 class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   String _activeFilter = 'all';
+  String _searchQuery = '';
+  bool _showSearch = false;
+  final _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,12 +34,26 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
 
     return CupertinoPageScaffold(
       navigationBar: CupertinoNavigationBar(
-        middle: Text('History',
-            style: TorrentFlowTheme.headline.copyWith(
-              color: isDark
-                  ? TorrentFlowTheme.darkText
-                  : TorrentFlowTheme.lightText,
-            )),
+        middle: _showSearch
+            ? CupertinoTextField(
+                controller: _searchController,
+                placeholder: 'Search history...',
+                placeholderStyle: TextStyle(color: isDark ? TorrentFlowTheme.darkTextSecondary : TorrentFlowTheme.lightTextSecondary),
+                style: TextStyle(color: isDark ? TorrentFlowTheme.darkText : TorrentFlowTheme.lightText),
+                autofocus: true,
+                onChanged: (v) => setState(() => _searchQuery = v.toLowerCase()),
+                decoration: BoxDecoration(
+                  color: isDark ? TorrentFlowTheme.darkSurface2 : TorrentFlowTheme.lightSurface2,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              )
+            : Text('History',
+                style: TorrentFlowTheme.headline.copyWith(
+                  color: isDark
+                      ? TorrentFlowTheme.darkText
+                      : TorrentFlowTheme.lightText,
+                )),
         backgroundColor: isDark
             ? TorrentFlowTheme.darkSurface.withValues(alpha: 0.85)
             : TorrentFlowTheme.lightSurface.withValues(alpha: 0.85),
@@ -40,6 +63,14 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                 ? TorrentFlowTheme.darkSeparator
                 : TorrentFlowTheme.lightSeparator,
             width: 0.5,
+          ),
+        ),
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () => setState(() => _showSearch = !_showSearch),
+          child: Icon(
+            _showSearch ? CupertinoIcons.xmark_circle : CupertinoIcons.search,
+            color: TorrentFlowTheme.accent,
           ),
         ),
         trailing: history.isNotEmpty
@@ -109,18 +140,17 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   }
 
   List<HistoryItem> _filterItems(List<HistoryItem> items) {
+    var result = items;
     switch (_activeFilter) {
       case 'magnet':
-        return items
-            .where((i) => i.type == HistoryItemType.magnetLink)
-            .toList();
+        result = result.where((i) => i.type == HistoryItemType.magnetLink).toList();
       case 'download':
-        return items
-            .where((i) => i.type == HistoryItemType.download)
-            .toList();
-      default:
-        return items;
+        result = result.where((i) => i.type == HistoryItemType.download).toList();
     }
+    if (_searchQuery.isNotEmpty) {
+      result = result.where((i) => i.title.toLowerCase().contains(_searchQuery)).toList();
+    }
+    return result;
   }
 
   Widget _buildEmptyState(bool isDark) {

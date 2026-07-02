@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import '../models/torrent.dart';
 import '../core/constants/app_constants.dart';
 import '../logging/app_logger.dart';
+import 'torrent/torrent_downloader.dart';
 
 class DownloadService {
   final Dio _dio;
@@ -60,6 +61,11 @@ class DownloadService {
   }
 
   void _startDownload(String id, String url, StreamController<DownloadTask> controller, {bool isRetry = false}) {
+    if (url.startsWith('magnet:')) {
+      _startMagnetDownload(id, url, controller);
+      return;
+    }
+
     _updateTaskById(id, status: DownloadStatus.downloading, downloadedBytes: 0);
     _retryCounts.putIfAbsent(id, () => 0);
 
@@ -132,8 +138,34 @@ class DownloadService {
   }
 
   bool _canResolveUrl(String url) {
-    if (url.startsWith('magnet:') || url.startsWith('torrent:')) return false;
+    if (url.startsWith('magnet:')) return true;
     return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('ftp://');
+  }
+
+  final Map<String, TorrentDownloader> _activeTorrentDownloaders = {};
+
+  void _startMagnetDownload(String id, String url, StreamController<DownloadTask> controller) {
+    _updateTaskById(id, status: DownloadStatus.downloading);
+    final task = _tasks.firstWhere((t) => t.id == id);
+    final savePath = task.savePath;
+
+    final downloader = TorrentDownloader();
+    _activeTorrentDownloaders[id] = downloader;
+
+    downloader.download(
+      magnetUri: url,
+      savePath: savePath,
+      taskId: id,
+      controller: controller,
+    ).then((_) {
+      _cleanup(id);
+    }).catchError((error) {
+      if (!controller.isClosed) {
+        _updateTaskById(id, status: DownloadStatus.error);
+        controller.add(_tasks.firstWhere((t) => t.id == id));
+      }
+      _cleanup(id);
+    });
   }
 
   void _ensureDirectory(String path) {

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/services.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
@@ -6,6 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../models/torrent.dart';
 import '../../../providers/downloads/download_providers.dart';
 import '../../../providers/history/history_providers.dart';
+import '../../../providers/seedr/seedr_providers.dart';
 
 class AddDownloadSheet extends ConsumerStatefulWidget {
   final TorrentInfo? torrent;
@@ -25,13 +27,14 @@ class _AddDownloadSheetState extends ConsumerState<AddDownloadSheet> {
   bool _isAdding = false;
   String? _error;
   DownloadPriority _priority = DownloadPriority.normal;
-  final _limitController = TextEditingController();
 
   @override
   void dispose() {
-    _limitController.dispose();
     super.dispose();
   }
+
+  bool get _hasDirectUrl => widget.torrent?.fileUrl != null && widget.torrent!.fileUrl!.isNotEmpty;
+  bool get _hasMagnet => (widget.magnetUri?.isNotEmpty == true) || (widget.torrent?.magnetUri?.isNotEmpty == true);
 
   @override
   Widget build(BuildContext context) {
@@ -77,19 +80,51 @@ class _AddDownloadSheetState extends ConsumerState<AddDownloadSheet> {
             const SizedBox(height: 8),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: TorrentFlowTheme.standardPadding),
-              child: Row(
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 4,
                 children: [
                   if (widget.torrent!.source != null)
                     _Badge(label: widget.torrent!.source!, color: TorrentFlowTheme.accent),
-                  const SizedBox(width: 8),
                   if (widget.torrent!.quality != null)
                     _Badge(label: widget.torrent!.quality!, color: TorrentFlowTheme.success),
-                  const SizedBox(width: 8),
-                  Text('Size: ${widget.torrent!.formattedSize} | ${widget.torrent!.seeders} seeders',
-                    style: TorrentFlowTheme.footnote.copyWith(
-                      color: isDark ? TorrentFlowTheme.darkTextSecondary : TorrentFlowTheme.lightTextSecondary,
-                    )),
+                  _Badge(
+                    label: _hasDirectUrl ? 'Direct Download' : 'Magnet Link',
+                    color: _hasDirectUrl ? TorrentFlowTheme.success : TorrentFlowTheme.warning,
+                  ),
                 ],
+              ),
+            ),
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: TorrentFlowTheme.standardPadding),
+              child: Text('Size: ${widget.torrent!.formattedSize} | ${widget.torrent!.seeders} seeders',
+                style: TorrentFlowTheme.footnote.copyWith(
+                  color: isDark ? TorrentFlowTheme.darkTextSecondary : TorrentFlowTheme.lightTextSecondary,
+                )),
+            ),
+          ],
+          if (_magnetOnly) ...[
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: TorrentFlowTheme.standardPadding),
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: TorrentFlowTheme.warning.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: TorrentFlowTheme.warning.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(CupertinoIcons.info_circle, size: 16, color: TorrentFlowTheme.warning),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text('Direct download unavailable. Use Seedr cloud or copy the magnet link.',
+                        style: TorrentFlowTheme.footnote.copyWith(color: TorrentFlowTheme.warning)),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -138,10 +173,35 @@ class _AddDownloadSheetState extends ConsumerState<AddDownloadSheet> {
                 onPressed: _isAdding ? null : _addDownload,
                 child: _isAdding
                     ? const CupertinoActivityIndicator(color: CupertinoColors.white)
-                    : const Text('Start Download'),
+                    : Text(_hasDirectUrl ? 'Start Download' : 'Add to Downloads (magnet only)'),
               ),
             ),
           ),
+          if (_magnetOnly) ...[
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: TorrentFlowTheme.standardPadding),
+              child: SizedBox(
+                width: double.infinity,
+                child: CupertinoButton(
+                  color: TorrentFlowTheme.accent.withValues(alpha: 0.15),
+                  onPressed: _isAdding ? null : _sendToSeedr,
+                  child: const Text('Send to Seedr Cloud'),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: TorrentFlowTheme.standardPadding),
+              child: SizedBox(
+                width: double.infinity,
+                child: CupertinoButton(
+                  onPressed: _copyMagnet,
+                  child: const Text('Copy Magnet Link'),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: TorrentFlowTheme.standardPadding),
@@ -158,6 +218,39 @@ class _AddDownloadSheetState extends ConsumerState<AddDownloadSheet> {
     );
   }
 
+  bool get _magnetOnly => _hasMagnet && !_hasDirectUrl;
+
+  Future<void> _copyMagnet() async {
+    final magnet = widget.magnetUri ?? widget.torrent?.magnetUri;
+    if (magnet == null || magnet.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: magnet));
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  Future<void> _sendToSeedr() async {
+    setState(() {
+      _isAdding = true;
+      _error = null;
+    });
+    try {
+      final magnet = widget.magnetUri ?? widget.torrent?.magnetUri;
+      if (magnet == null || magnet.isEmpty) throw Exception('No magnet link available');
+      final seedrService = ref.read(seedrServiceProvider);
+      await seedrService.addMagnet(magnet);
+      ref.read(historyProvider.notifier).addMagnetLink(
+        title: widget.torrent?.title ?? 'Unknown',
+        magnetUri: magnet,
+        infoHash: widget.torrent?.infoHash,
+        totalSize: widget.torrent?.size,
+      );
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Seedr error: $e');
+    } finally {
+      if (mounted) setState(() => _isAdding = false);
+    }
+  }
+
   Future<void> _addDownload() async {
     setState(() {
       _isAdding = true;
@@ -166,10 +259,16 @@ class _AddDownloadSheetState extends ConsumerState<AddDownloadSheet> {
     try {
       final notifier = ref.read(downloadTasksProvider.notifier);
       final title = widget.torrent?.title ?? widget.magnetUri ?? 'Unknown Torrent';
-      final url = widget.magnetUri ?? widget.torrent?.magnetUri ?? '';
+      final magnet = widget.magnetUri ?? widget.torrent?.magnetUri;
       final infoHash = widget.torrent?.infoHash;
+      final fileUrl = widget.torrent?.fileUrl;
 
-      if (url.isEmpty) {
+      String downloadUrl;
+      if (fileUrl != null && fileUrl.isNotEmpty) {
+        downloadUrl = fileUrl;
+      } else if (magnet != null && magnet.isNotEmpty) {
+        downloadUrl = magnet;
+      } else {
         throw Exception('No download URL or magnet link available');
       }
 
@@ -183,9 +282,9 @@ class _AddDownloadSheetState extends ConsumerState<AddDownloadSheet> {
 
       await notifier.addDownload(
         title: title,
-        url: url,
+        url: downloadUrl,
         savePath: savePath,
-        magnetUri: widget.magnetUri ?? widget.torrent?.magnetUri,
+        magnetUri: magnet,
         infoHash: infoHash,
         downloadLimit: null,
         uploadLimit: null,
@@ -193,7 +292,7 @@ class _AddDownloadSheetState extends ConsumerState<AddDownloadSheet> {
 
       ref.read(historyProvider.notifier).addDownload(
         title: title,
-        magnetUri: url,
+        magnetUri: downloadUrl,
         infoHash: infoHash,
         totalSize: widget.torrent?.size,
       );

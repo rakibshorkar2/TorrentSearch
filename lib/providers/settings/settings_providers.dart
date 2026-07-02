@@ -15,7 +15,9 @@ final settingsProvider = StateNotifierProvider<SettingsNotifier, AppSettings>((r
 
 final screenAwakeProvider = Provider<ScreenAwakeController>((ref) {
   final controller = ScreenAwakeController();
-  ref.listen(settingsProvider, (prev, next) {
+  final settings = ref.read(settingsProvider);
+  controller.update(settings);
+  ref.listen(settingsProvider, (_, next) {
     controller.update(next);
   });
   ref.onDispose(() => controller.dispose());
@@ -24,33 +26,54 @@ final screenAwakeProvider = Provider<ScreenAwakeController>((ref) {
 
 class ScreenAwakeController {
   Timer? _timer;
+  Timer? _watchdog;
+  DateTime? _expiresAt;
 
   void update(AppSettings settings) {
     _timer?.cancel();
-    _timer = null;
+    _expiresAt = null;
+
     try {
       if (settings.screenAwakeMinutes != null && settings.screenAwakeMinutes! > 0) {
+        final duration = Duration(minutes: settings.screenAwakeMinutes!);
+        _expiresAt = DateTime.now().add(duration);
         WakelockPlus.enable();
-        _timer = Timer(Duration(minutes: settings.screenAwakeMinutes!), () {
-          try {
-            WakelockPlus.disable();
-          } catch (_) {}
-          _timer = null;
+        _startWatchdog();
+        _timer = Timer(duration, () {
+          _disableWakeLock();
         });
       } else {
-        WakelockPlus.disable();
+        _disableWakeLock();
       }
     } catch (e) {
       appLogger.e('Screen awake error', error: e);
     }
   }
 
-  void dispose() {
+  void _startWatchdog() {
+    _watchdog?.cancel();
+    _watchdog = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (_expiresAt != null && DateTime.now().isAfter(_expiresAt!)) {
+        _disableWakeLock();
+      }
+    });
+  }
+
+  void _disableWakeLock() {
     _timer?.cancel();
     _timer = null;
+    _watchdog?.cancel();
+    _watchdog = null;
+    _expiresAt = null;
     try {
       WakelockPlus.disable();
     } catch (_) {}
+  }
+
+  void dispose() {
+    _timer?.cancel();
+    _watchdog?.cancel();
+    _disableWakeLock();
   }
 }
 

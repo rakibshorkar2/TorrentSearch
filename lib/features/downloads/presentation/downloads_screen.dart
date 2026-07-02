@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/glass_card.dart';
 import '../../../models/torrent.dart';
@@ -18,19 +19,45 @@ class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
   bool _selectionMode = false;
   final Set<String> _selectedTasks = {};
   String _activeFilter = 'all';
+  String _searchQuery = '';
+  bool _showSearch = false;
+  final _searchController = TextEditingController();
+  String _sortBy = 'date';
+  bool _sortAsc = false;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = CupertinoTheme.brightnessOf(context) == Brightness.dark;
     final tasks = ref.watch(downloadTasksProvider);
     final stats = ref.watch(downloadStatsProvider);
 
-    final filteredTasks = _filterTasks(tasks);
+    final filteredTasks = _filterAndSortTasks(tasks);
 
     return CupertinoPageScaffold(
       navigationBar: CupertinoNavigationBar(
-        middle: Text('Downloads', style: TorrentFlowTheme.headline.copyWith(
-          color: isDark ? TorrentFlowTheme.darkText : TorrentFlowTheme.lightText,
-        )),
+        middle: _showSearch
+            ? CupertinoTextField(
+                controller: _searchController,
+                placeholder: 'Search downloads...',
+                placeholderStyle: TextStyle(color: isDark ? TorrentFlowTheme.darkTextSecondary : TorrentFlowTheme.lightTextSecondary),
+                style: TextStyle(color: isDark ? TorrentFlowTheme.darkText : TorrentFlowTheme.lightText),
+                autofocus: true,
+                onChanged: (v) => setState(() => _searchQuery = v.toLowerCase()),
+                decoration: BoxDecoration(
+                  color: isDark ? TorrentFlowTheme.darkSurface2 : TorrentFlowTheme.lightSurface2,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              )
+            : Text('Downloads', style: TorrentFlowTheme.headline.copyWith(
+                color: isDark ? TorrentFlowTheme.darkText : TorrentFlowTheme.lightText,
+              )),
         backgroundColor: isDark
             ? TorrentFlowTheme.darkSurface.withValues(alpha: 0.85)
             : TorrentFlowTheme.lightSurface.withValues(alpha: 0.85),
@@ -38,10 +65,29 @@ class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
           color: isDark ? TorrentFlowTheme.darkSeparator : TorrentFlowTheme.lightSeparator,
           width: 0.5,
         )),
-        trailing: CupertinoButton(
+        leading: CupertinoButton(
           padding: EdgeInsets.zero,
-          onPressed: () => _showAddOptions(context),
-          child: Icon(CupertinoIcons.plus, color: TorrentFlowTheme.accent),
+          onPressed: () => setState(() => _showSearch = !_showSearch),
+          child: Icon(
+            _showSearch ? CupertinoIcons.xmark_circle : CupertinoIcons.search,
+            color: TorrentFlowTheme.accent,
+          ),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: () => _showSortOptions(context),
+              child: Icon(CupertinoIcons.arrow_up_arrow_down, color: TorrentFlowTheme.accent),
+            ),
+            const SizedBox(width: 4),
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: () => _showAddOptions(context),
+              child: Icon(CupertinoIcons.plus, color: TorrentFlowTheme.accent),
+            ),
+          ],
         ),
       ),
       child: SafeArea(
@@ -61,6 +107,91 @@ class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
     );
   }
 
+  void _showSortOptions(BuildContext context) {
+    final sorts = [
+      {'key': 'date', 'label': 'Date Added'},
+      {'key': 'name', 'label': 'Name'},
+      {'key': 'size', 'label': 'Size'},
+      {'key': 'progress', 'label': 'Progress'},
+      {'key': 'speed', 'label': 'Speed'},
+    ];
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => Container(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
+        decoration: BoxDecoration(
+          color: CupertinoTheme.brightnessOf(context) == Brightness.dark
+              ? TorrentFlowTheme.darkSurface : TorrentFlowTheme.lightSurface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              width: 36, height: 4,
+              decoration: BoxDecoration(
+                color: TorrentFlowTheme.darkTextSecondary,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text('Sort By', style: TorrentFlowTheme.title3),
+            ),
+            ...sorts.map((s) => CupertinoButton(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              onPressed: () {
+                if (_sortBy == s['key']) {
+                  _sortAsc = !_sortAsc;
+                } else {
+                  _sortBy = s['key']!;
+                  _sortAsc = s['key'] == 'date' || s['key'] == 'progress';
+                }
+                setState(() {});
+                Navigator.of(ctx).pop();
+              },
+              child: Row(
+                children: [
+                  Expanded(child: Text(s['label']!, style: TorrentFlowTheme.body)),
+                  if (_sortBy == s['key'])
+                    Icon(
+                      _sortAsc ? CupertinoIcons.chevron_up : CupertinoIcons.chevron_down,
+                      color: TorrentFlowTheme.accent,
+                    ),
+                ],
+              ),
+            )),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<DownloadTask> _filterAndSortTasks(List<DownloadTask> tasks) {
+    var result = _filterTasks(tasks);
+    if (_searchQuery.isNotEmpty) {
+      result = result.where((t) => t.title.toLowerCase().contains(_searchQuery)).toList();
+    }
+    result.sort((a, b) {
+      int cmp;
+      switch (_sortBy) {
+        case 'name':
+          cmp = a.title.compareTo(b.title);
+        case 'size':
+          cmp = a.totalSize.compareTo(b.totalSize);
+        case 'progress':
+          cmp = a.progress.compareTo(b.progress);
+        case 'speed':
+          cmp = a.downloadSpeed.compareTo(b.downloadSpeed);
+        default:
+          cmp = b.addedAt.compareTo(a.addedAt);
+      }
+      return _sortAsc ? cmp : -cmp;
+    });
+    return result;
+  }
+
   Widget _buildStatsBar(DownloadStats stats, bool isDark) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -69,8 +200,31 @@ class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
         children: [
           _StatItem(label: 'Active', count: stats.active, color: TorrentFlowTheme.accent),
           _StatItem(label: 'Paused', count: stats.paused, color: TorrentFlowTheme.paused),
-          _StatItem(label: 'Complete', count: stats.completed, color: TorrentFlowTheme.success),
+          GestureDetector(
+            onTap: stats.completed > 0 ? () => _confirmClearCompleted(context) : null,
+            child: _StatItem(label: 'Complete', count: stats.completed, color: TorrentFlowTheme.success),
+          ),
           _StatItem(label: 'Errors', count: stats.error, color: TorrentFlowTheme.error),
+        ],
+      ),
+    );
+  }
+
+  void _confirmClearCompleted(BuildContext context) {
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Clear Completed'),
+        content: const Text('Remove all completed downloads from the list? Files remain on disk.'),
+        actions: [
+          CupertinoButton(child: const Text('Cancel'), onPressed: () => Navigator.of(ctx).pop()),
+          CupertinoButton(
+            child: Text('Clear', style: TextStyle(color: TorrentFlowTheme.error)),
+            onPressed: () {
+              ref.read(downloadTasksProvider.notifier).removeCompleted();
+              Navigator.of(ctx).pop();
+            },
+          ),
         ],
       ),
     );
