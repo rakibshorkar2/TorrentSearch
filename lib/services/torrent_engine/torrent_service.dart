@@ -9,7 +9,7 @@ import 'libtorrent_engine.dart';
 class TorrentService {
   static TorrentService? _instance;
   TorrentEngine? _engine;
-  bool _initialized = false;
+  Future<void>? _initFuture;
 
   TorrentService._();
 
@@ -19,24 +19,28 @@ class TorrentService {
   }
 
   TorrentEngine get engine {
-    if (_engine == null) initialize();
+    if (_engine == null) {
+      _engine = _createEngine();
+      _initFuture ??= _finishInitialize();
+    }
     return _engine!;
   }
 
   Future<void> initialize() async {
-    if (_initialized) return;
-    _engine = _createEngine();
+    engine; // trigger lazy init
+    if (_initFuture != null) await _initFuture;
+  }
+
+  Future<void> _finishInitialize() async {
     try {
       final docsDir = await getApplicationDocumentsDirectory();
       final downloadDir = '${docsDir.path}${Platform.pathSeparator}Downloads';
       await _engine!.initialize(savePath: downloadDir);
-      _initialized = true;
       appLogger.i('TorrentService initialized with ${_engine.runtimeType}');
     } catch (e) {
       appLogger.e('Failed to initialize torrent engine', error: e);
       _engine = _createEngine();
       await _engine!.initialize(savePath: '/tmp');
-      _initialized = true;
     }
   }
 
@@ -52,30 +56,52 @@ class TorrentService {
     return DevelopmentTorrentEngine();
   }
 
-  Future<String> addMagnet(String magnetUri, {String? name}) {
+  Future<String> addMagnet(String magnetUri, {String? name}) async {
+    await initialize();
     return engine.addMagnet(magnetUri, name: name);
   }
 
-  Future<String> addTorrentFile(String filePath, {String? name}) {
+  Future<String> addTorrentFile(String filePath, {String? name}) async {
+    await initialize();
     return engine.addTorrentFile(filePath, name: name);
   }
 
-  void remove(String id) => engine.remove(id);
+  Future<void> remove(String id) async {
+    await initialize();
+    engine.remove(id);
+  }
 
-  void pause(String id) => engine.pause(id);
+  Future<void> pause(String id) async {
+    await initialize();
+    engine.pause(id);
+  }
 
-  void resume(String id) => engine.resume(id);
+  Future<void> resume(String id) async {
+    await initialize();
+    engine.resume(id);
+  }
 
-  TorrentStatus? status(String id) => engine.status(id);
+  Future<TorrentStatus?> status(String id) async {
+    await initialize();
+    return engine.status(id);
+  }
 
-  List<TorrentStatus> allStatuses() => engine.allStatuses();
+  Future<List<TorrentStatus>> allStatuses() async {
+    await initialize();
+    return engine.allStatuses();
+  }
 
-  Stream<TorrentStatus> updates() => engine.updates();
+  Stream<TorrentStatus> updates() {
+    _engine ??= _createEngine();
+    _initFuture ??= _finishInitialize();
+    return engine.updates();
+  }
 
   Future<void> shutdown() async {
     if (_engine != null) {
       await _engine!.shutdown();
+      _engine = null;
     }
-    _initialized = false;
+    _initFuture = null;
   }
 }

@@ -1,2 +1,4 @@
 #include "Generated.xcconfig"
-OTHER_LDFLAGS=$(inherited) -L"$(PROJECT_DIR)/Runner" -ltorrent_ffi
+# CI builds libtorrent_engine.a (old engine) for calculate_health symbol support
+# For libtorrent FFI, run: bash native/build_ios.sh and add -ltorrent_ffi below
+OTHER_LDFLAGS=$(inherited) -L"$(PROJECT_DIR)/Runner" -ltorrent_engine
