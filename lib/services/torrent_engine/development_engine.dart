@@ -9,6 +9,7 @@ class DevelopmentTorrentEngine implements TorrentEngine {
   final Map<String, TorrentDownloader> _downloaders = {};
   final Map<String, TorrentStatus> _statuses = {};
   final Map<String, StreamController<DownloadTask>> _taskControllers = {};
+  final Map<String, StreamSubscription<DownloadTask>> _taskSubscriptions = {};
   final _updateController = StreamController<TorrentStatus>.broadcast();
   String _savePath = '';
   bool _initialized = false;
@@ -44,33 +45,38 @@ class DevelopmentTorrentEngine implements TorrentEngine {
       savePath: effectiveSavePath,
       taskId: id,
       controller: controller,
-    ).then((_) {
-      final s = _statuses[id];
-      if (s != null) {
-        _statuses[id] = s.copyWith(state: TorrentState.finished, progress: 1.0);
-        _updateController.add(s.copyWith(state: TorrentState.finished, progress: 1.0));
-      }
-      _cleanup(id);
-    }).catchError((error) {
-      final s = _statuses[id];
-      if (s != null) {
-        _statuses[id] = s.copyWith(state: TorrentState.error, errorMessage: error.toString());
-        _updateController.add(s.copyWith(state: TorrentState.error, errorMessage: error.toString()));
-      }
-      _cleanup(id);
-    });
+    );
 
-    controller.stream.listen((task) {
-      final s = _statuses[id];
-      if (s == null) return;
-      _statuses[id] = s.copyWith(
-        state: _downloadStateToTorrentState(task.status),
-        progress: task.progress,
-        totalDownloaded: task.downloadedBytes,
-        totalSize: task.totalSize,
-      );
-      _updateController.add(_statuses[id]!);
-    });
+    final subscription = controller.stream.listen(
+      (task) {
+        final s = _statuses[id];
+        if (s == null) return;
+        _statuses[id] = s.copyWith(
+          state: _downloadStateToTorrentState(task.status),
+          progress: task.progress,
+          totalDownloaded: task.downloadedBytes,
+          totalSize: task.totalSize,
+        );
+        _updateController.add(_statuses[id]!);
+      },
+      onError: (error) {
+        final s = _statuses[id];
+        if (s != null) {
+          _statuses[id] = s.copyWith(state: TorrentState.error, errorMessage: error.toString());
+          _updateController.add(s.copyWith(state: TorrentState.error, errorMessage: error.toString()));
+        }
+        _cleanup(id);
+      },
+      onDone: () {
+        final s = _statuses[id];
+        if (s != null && s.state != TorrentState.error && s.state != TorrentState.finished) {
+          _statuses[id] = s.copyWith(state: TorrentState.finished, progress: 1.0);
+          _updateController.add(s.copyWith(state: TorrentState.finished, progress: 1.0));
+        }
+        _cleanup(id);
+      },
+    );
+    _taskSubscriptions[id] = subscription;
 
     return id;
   }
@@ -102,6 +108,7 @@ class DevelopmentTorrentEngine implements TorrentEngine {
     _downloaders[id]?.cancel();
     _downloaders.remove(id);
     _statuses.remove(id);
+    _taskSubscriptions.remove(id)?.cancel();
     _taskControllers.remove(id)?.close();
   }
 
@@ -136,6 +143,10 @@ class DevelopmentTorrentEngine implements TorrentEngine {
     }
     _downloaders.clear();
     _statuses.clear();
+    for (final sub in _taskSubscriptions.values) {
+      await sub.cancel();
+    }
+    _taskSubscriptions.clear();
     for (final c in _taskControllers.values) {
       await c.close();
     }

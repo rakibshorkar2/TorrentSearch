@@ -144,17 +144,19 @@ class DownloadService {
   }
 
   StreamSubscription<engine.TorrentStatus>? _engineSub;
+  final Map<String, String> _activeEngineIds = {};
+  final Map<String, StreamController<DownloadTask>> _engineTaskControllers = {};
 
   void _startMagnetDownload(String id, String url, StreamController<DownloadTask> controller) {
     _updateTaskById(id, status: DownloadStatus.downloading);
     final task = _tasks.firstWhere((t) => t.id == id);
+    _ensureDirectory(task.savePath);
 
     final svc = TorrentService.instance;
     svc.addMagnet(url, name: task.title, savePath: task.savePath).then((torrentId) {
       _activeEngineIds[id] = torrentId;
-      _engineSub ??= svc.updates().listen((status) {
-        _handleEngineUpdate(status, controller);
-      });
+      _engineTaskControllers[torrentId] = controller;
+      _engineSub ??= svc.updates().listen(_handleEngineUpdate);
     }).catchError((error) {
       if (!controller.isClosed) {
         _updateTaskById(id, status: DownloadStatus.error);
@@ -163,9 +165,10 @@ class DownloadService {
     });
   }
 
-  final Map<String, String> _activeEngineIds = {};
+  void _handleEngineUpdate(engine.TorrentStatus status) {
+    final controller = _engineTaskControllers[status.id];
+    if (controller == null) return;
 
-  void _handleEngineUpdate(engine.TorrentStatus status, StreamController<DownloadTask> controller) {
     final taskId = _activeEngineIds.entries
       .firstWhere(
         (e) => e.value == status.id,
@@ -213,6 +216,7 @@ class DownloadService {
 
     if (dlStatus == DownloadStatus.completed || dlStatus == DownloadStatus.error) {
       _updateTaskById(taskId, completedAt: DateTime.now());
+      _engineTaskControllers.remove(status.id);
       _cleanup(taskId);
     }
   }
@@ -256,6 +260,10 @@ class DownloadService {
     _cancelTokens[taskId]?.cancel();
     _tasks.removeWhere((t) => t.id == taskId);
     _retryCounts.remove(taskId);
+    final engineId = _activeEngineIds.remove(taskId);
+    if (engineId != null) {
+      _engineTaskControllers.remove(engineId);
+    }
     _cleanup(taskId);
   }
 
@@ -337,6 +345,7 @@ class DownloadService {
       controller.close();
     }
     _activeEngineIds.clear();
+    _engineTaskControllers.clear();
     _cancelTokens.clear();
     _controllers.clear();
     _tasks.clear();
