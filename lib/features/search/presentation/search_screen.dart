@@ -5,6 +5,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/glass_card.dart';
 import '../../../models/torrent.dart';
 import '../../../providers/search/search_providers.dart';
+import '../../../providers/history/history_providers.dart';
 import '../../../models/search_result.dart';
 import '../../downloads/presentation/add_download_sheet.dart';
 import '../../../providers/seedr/seedr_providers.dart';
@@ -449,6 +450,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   if (torrent.magnetUri != null) {
                     Clipboard.setData(ClipboardData(text: torrent.magnetUri!));
                     HapticFeedback.lightImpact();
+                    ref.read(historyProvider.notifier).addMagnetLink(
+                      title: torrent.title,
+                      magnetUri: torrent.magnetUri!,
+                      infoHash: torrent.infoHash,
+                      totalSize: torrent.size,
+                    );
                     _showToast('Magnet link copied');
                   }
                 },

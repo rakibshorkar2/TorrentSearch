@@ -6,6 +6,7 @@ import 'core/theme/cupertino_theme.dart';
 import 'providers/settings/settings_providers.dart';
 import 'features/search/presentation/search_screen.dart';
 import 'features/downloads/presentation/downloads_screen.dart';
+import 'features/history/presentation/history_screen.dart';
 import 'features/seedr/presentation/seedr_screen.dart';
 import 'features/settings/presentation/settings_screen.dart';
 
@@ -47,6 +48,7 @@ class _MainShellState extends ConsumerState<MainShell> {
   final _screens = const [
     SearchScreen(),
     DownloadsScreen(),
+    HistoryScreen(),
     SeedrScreen(),
     SettingsScreen(),
   ];
@@ -78,6 +80,11 @@ class _MainShellState extends ConsumerState<MainShell> {
             icon: Icon(CupertinoIcons.arrow_down_circle),
             activeIcon: Icon(CupertinoIcons.arrow_down_circle_fill),
             label: 'Downloads',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(CupertinoIcons.clock),
+            activeIcon: Icon(CupertinoIcons.clock_fill),
+            label: 'History',
           ),
           BottomNavigationBarItem(
             icon: Icon(CupertinoIcons.cloud),

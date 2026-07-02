@@ -5,6 +5,7 @@ import 'app.dart';
 import 'core/native/native_service.dart';
 import 'providers/downloads/download_providers.dart';
 import 'services/storage_service.dart';
+import 'services/history_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,6 +17,9 @@ void main() async {
   runZonedGuarded(() async {
     final storage = StorageService();
     await storage.init();
+
+    final historyService = HistoryService();
+    await historyService.init();
 
     runApp(
       const ProviderScope(

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/torrent.dart';
 import '../../../providers/downloads/download_providers.dart';
+import '../../../providers/history/history_providers.dart';
 
 class AddDownloadSheet extends ConsumerStatefulWidget {
   final TorrentInfo? torrent;
@@ -179,6 +180,13 @@ class _AddDownloadSheetState extends ConsumerState<AddDownloadSheet> {
         downloadLimit: null,
         uploadLimit: null,
       ).first;
+
+      ref.read(historyProvider.notifier).addDownload(
+        title: title,
+        magnetUri: url,
+        infoHash: infoHash,
+        totalSize: widget.torrent?.size,
+      );
 
       if (mounted) Navigator.of(context).pop();
     } catch (e) {

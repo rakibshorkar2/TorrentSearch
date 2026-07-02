@@ -19,6 +19,7 @@ class AppConstants {
   static const String hiveBoxDownloads = 'downloads';
   static const String hiveBoxSearchHistory = 'search_history';
   static const String hiveBoxSeedrCache = 'seedr_cache';
+  static const String hiveBoxHistory = 'history';
 
   static const String keychainSeedrToken = 'seedr_token';
   static const String keychainProxSettings = 'proxy_settings';
