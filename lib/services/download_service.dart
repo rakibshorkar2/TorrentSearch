@@ -38,6 +38,7 @@ class DownloadService {
       title: title,
       magnetUri: magnetUri,
       infoHash: infoHash,
+      downloadUrl: _canResolveUrl(url) ? url : null,
       totalSize: 0,
       savePath: savePath,
       addedAt: DateTime.now(),
@@ -48,18 +49,19 @@ class DownloadService {
     _tasks.add(initial);
     controller.add(initial);
 
-    _startDownload(id, url, controller);
+    if (_canResolveUrl(url)) {
+      _startDownload(id, url, controller);
+    } else {
+      _updateTaskById(id, status: DownloadStatus.error);
+      controller.add(_tasks.firstWhere((t) => t.id == id));
+      appLogger.e('Cannot download: unsupported URL $url');
+    }
     return controller.stream;
   }
 
   void _startDownload(String id, String url, StreamController<DownloadTask> controller, {bool isRetry = false}) {
-    if (!_canResolveUrl(url)) {
-      controller.addError(Exception('Cannot download: unsupported URL $url'));
-      _cleanup(id);
-      return;
-    }
-
     _updateTaskById(id, status: DownloadStatus.downloading, downloadedBytes: 0);
+    _retryCounts.putIfAbsent(id, () => 0);
 
     int lastBytes = 0;
     DateTime lastTime = DateTime.now();
@@ -114,9 +116,10 @@ class DownloadService {
       if (error is DioException && CancelToken.isCancel(error)) {
         _updateTaskById(id, status: DownloadStatus.paused);
         controller.add(_tasks.firstWhere((t) => t.id == id));
-      } else if (!isRetry && _retryCounts.containsKey(id) && _retryCounts[id]! < _maxRetries) {
-        _retryCounts[id] = (_retryCounts[id] ?? 0) + 1;
+      } else if (!isRetry && _retryCounts[id]! < _maxRetries) {
+        _retryCounts[id] = _retryCounts[id]! + 1;
         appLogger.w('Retrying download $id (attempt ${_retryCounts[id]})');
+        _cancelTokens[id] = CancelToken();
         Future.delayed(const Duration(seconds: 5), () {
           _startDownload(id, url, controller, isRetry: true);
         });
@@ -155,20 +158,14 @@ class DownloadService {
     if (idx < 0) return const Stream.empty();
 
     final task = _tasks[idx];
+    final url = task.downloadUrl;
+    if (url == null || url.isEmpty || !_canResolveUrl(url)) {
+      return Stream.error(Exception('Cannot resume: no valid download URL'));
+    }
+
     final controller = StreamController<DownloadTask>.broadcast();
     _controllers[taskId] = controller;
     _cancelTokens[taskId] = CancelToken();
-
-    final url = task.magnetUri?.isNotEmpty == true
-        ? task.magnetUri!
-        : task.torrentPath?.isNotEmpty == true
-            ? task.torrentPath!
-            : '';
-
-    if (!_canResolveUrl(url)) {
-      controller.addError(Exception('Cannot resume: no valid URL'));
-      return controller.stream;
-    }
 
     _startDownload(taskId, url, controller);
     return controller.stream;
@@ -186,8 +183,10 @@ class DownloadService {
     if (idx < 0) return const Stream.empty();
     final task = _tasks[idx];
 
-    final url = task.magnetUri?.isNotEmpty == true ? task.magnetUri! : task.torrentPath ?? '';
-    if (url.isEmpty) return const Stream.empty();
+    final url = task.downloadUrl;
+    if (url == null || url.isEmpty || !_canResolveUrl(url)) {
+      return Stream.error(Exception('Cannot retry: no valid download URL'));
+    }
 
     _retryCounts[taskId] = 0;
     final controller = StreamController<DownloadTask>.broadcast();

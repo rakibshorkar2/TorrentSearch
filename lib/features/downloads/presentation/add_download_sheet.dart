@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/torrent.dart';
 import '../../../providers/downloads/download_providers.dart';
@@ -171,10 +173,18 @@ class _AddDownloadSheetState extends ConsumerState<AddDownloadSheet> {
         throw Exception('No download URL or magnet link available');
       }
 
+      final docsDir = await getApplicationDocumentsDirectory();
+      final downloadsDir = Directory('${docsDir.path}/Downloads');
+      if (!await downloadsDir.exists()) {
+        await downloadsDir.create(recursive: true);
+      }
+      final safeName = title.replaceAll(RegExp(r'[^\w\s\-.]'), '').trim();
+      final savePath = '${downloadsDir.path}/${safeName.isNotEmpty ? safeName : 'download'}';
+
       await notifier.addDownload(
         title: title,
         url: url,
-        savePath: '/downloads/${title.replaceAll(RegExp(r'[^\w\s]'), '')}',
+        savePath: savePath,
         magnetUri: widget.magnetUri ?? widget.torrent?.magnetUri,
         infoHash: infoHash,
         downloadLimit: null,

@@ -149,6 +149,7 @@ class DownloadTask {
   final String? infoHash;
   final String? magnetUri;
   final String? torrentPath;
+  final String? downloadUrl;
   final int totalSize;
   final int downloadedBytes;
   final int uploadedBytes;
@@ -173,6 +174,7 @@ class DownloadTask {
     this.infoHash,
     this.magnetUri,
     this.torrentPath,
+    this.downloadUrl,
     required this.totalSize,
     this.downloadedBytes = 0,
     this.uploadedBytes = 0,
@@ -205,6 +207,7 @@ class DownloadTask {
     String? infoHash,
     String? magnetUri,
     String? torrentPath,
+    String? downloadUrl,
     int? totalSize,
     int? downloadedBytes,
     int? uploadedBytes,
@@ -229,6 +232,7 @@ class DownloadTask {
       infoHash: infoHash ?? this.infoHash,
       magnetUri: magnetUri ?? this.magnetUri,
       torrentPath: torrentPath ?? this.torrentPath,
+      downloadUrl: downloadUrl ?? this.downloadUrl,
       totalSize: totalSize ?? this.totalSize,
       downloadedBytes: downloadedBytes ?? this.downloadedBytes,
       uploadedBytes: uploadedBytes ?? this.uploadedBytes,

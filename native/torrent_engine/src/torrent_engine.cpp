@@ -6,6 +6,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <cmath>
+#include <chrono>
 
 // MARK: - Bencode C API
 
@@ -144,7 +145,12 @@ int piece_manager_verify_piece(PieceManagerHandle pm, int piece, const uint8_t* 
 }
 
 int piece_manager_get_missing_block(PieceManagerHandle pm, int piece, int* out_offset, int* out_length) {
-  return reinterpret_cast<PieceManager*>(pm)->get_missing_block(piece, *out_offset, *out_length) ? 1 : 0;
+  int offset = 0, length = 0;
+  auto* mgr = reinterpret_cast<PieceManager*>(pm);
+  bool result = mgr->get_missing_block(piece, offset, length);
+  if (out_offset) *out_offset = offset;
+  if (out_length) *out_length = length;
+  return result ? 1 : 0;
 }
 
 int piece_manager_completed_pieces(PieceManagerHandle pm, int* pieces, int max_count) {
@@ -163,10 +169,10 @@ struct BandwidthManager {
   int64_t max_up;
   int64_t down_used;
   int64_t up_used;
-  int64_t last_tick_ms;
+  std::chrono::steady_clock::time_point last_tick;
 
   BandwidthManager(int64_t md, int64_t mu)
-    : max_down(md), max_up(mu), down_used(0), up_used(0), last_tick_ms(0) {}
+    : max_down(md), max_up(mu), down_used(0), up_used(0), last_tick(std::chrono::steady_clock::now()) {}
 };
 
 BandwidthManagerHandle bandwidth_create(int64_t max_down, int64_t max_up) {
@@ -177,22 +183,19 @@ void bandwidth_destroy(BandwidthManagerHandle bw) {
   delete reinterpret_cast<BandwidthManager*>(bw);
 }
 
-static void bandwidth_tick(BandwidthManager* bwm, int64_t now_ms) {
-  if (bwm->last_tick_ms == 0) {
-    bwm->last_tick_ms = now_ms;
-    return;
-  }
-  int64_t elapsed = now_ms - bwm->last_tick_ms;
+static void bandwidth_tick(BandwidthManager* bwm) {
+  auto now = std::chrono::steady_clock::now();
+  auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - bwm->last_tick).count();
   if (elapsed >= 1000) {
     bwm->down_used = 0;
     bwm->up_used = 0;
-    bwm->last_tick_ms = now_ms;
+    bwm->last_tick = now;
   }
 }
 
 int64_t bandwidth_request_download(BandwidthManagerHandle bw, int64_t bytes) {
   auto* bwm = reinterpret_cast<BandwidthManager*>(bw);
-  bandwidth_tick(bwm, 0); // caller provides time or we use an approximation
+  bandwidth_tick(bwm);
   if (bwm->max_down <= 0) return bytes;
   int64_t allowed = bwm->max_down - bwm->down_used;
   if (allowed <= 0) return 0;
@@ -203,7 +206,7 @@ int64_t bandwidth_request_download(BandwidthManagerHandle bw, int64_t bytes) {
 
 int64_t bandwidth_request_upload(BandwidthManagerHandle bw, int64_t bytes) {
   auto* bwm = reinterpret_cast<BandwidthManager*>(bw);
-  bandwidth_tick(bwm, 0);
+  bandwidth_tick(bwm);
   if (bwm->max_up <= 0) return bytes;
   int64_t allowed = bwm->max_up - bwm->up_used;
   if (allowed <= 0) return 0;
@@ -214,13 +217,15 @@ int64_t bandwidth_request_upload(BandwidthManagerHandle bw, int64_t bytes) {
 
 void bandwidth_set_limits(BandwidthManagerHandle bw, int64_t max_down, int64_t max_up) {
   auto* bwm = reinterpret_cast<BandwidthManager*>(bw);
+  bandwidth_tick(bwm);
   bwm->max_down = max_down;
   bwm->max_up = max_up;
 }
 
 void bandwidth_tick_time(BandwidthManagerHandle bw, int64_t now_ms) {
+  (void)now_ms;
   auto* bwm = reinterpret_cast<BandwidthManager*>(bw);
-  bandwidth_tick(bwm, now_ms);
+  bandwidth_tick(bwm);
 }
 
 // MARK: - Health

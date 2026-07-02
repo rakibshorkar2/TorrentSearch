@@ -9,6 +9,7 @@ class TorrentFlowNativeService: NSObject {
   private var networkMonitor: NWPathMonitor?
   private var isWifiConnected = true
   private var backgroundCompletionHandlers: [String: () -> Void] = [:]
+  private var backgroundSessions: [String: URLSession] = [:]
 
   init(messenger: FlutterBinaryMessenger) {
     self.channel = FlutterMethodChannel(name: "com.torrentflow/native", binaryMessenger: messenger)
@@ -126,9 +127,12 @@ class TorrentFlowNativeService: NSObject {
   private func getDeviceModel() -> String {
     var systemInfo = utsname()
     uname(&systemInfo)
-    return withUnsafePointer(to: &systemInfo.machine) {
-      String(cString: UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self))
+    let mirror = Mirror(reflecting: systemInfo.machine)
+    let bytes = mirror.children.compactMap { $0.value as? Int8 }
+    if let nullIndex = bytes.firstIndex(of: 0) {
+      return String(cString: Array(bytes[0..<nullIndex]) + [0])
     }
+    return String(cString: bytes + [0])
   }
 
   private func getStorageInfo() -> [String: Int64] {
@@ -163,15 +167,16 @@ class TorrentFlowNativeService: NSObject {
     config.isDiscretionary = false
 
     let session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
+    backgroundSessions[identifier] = session
     session.downloadTask(with: url).resume()
     result(true)
   }
 
   func handleBackgroundURLSession(identifier: String, completionHandler: @escaping () -> Void) {
     backgroundCompletionHandlers[identifier] = completionHandler
-    _ = URLSession(
-      configuration: URLSessionConfiguration.background(withIdentifier: identifier),
-      delegate: self, delegateQueue: nil)
+    let config = URLSessionConfiguration.background(withIdentifier: identifier)
+    let session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
+    backgroundSessions[identifier] = session
   }
 }
 
@@ -187,9 +192,9 @@ extension TorrentFlowNativeService: URLSessionDownloadDelegate {
     try? FileManager.default.removeItem(at: destination)
     try? FileManager.default.moveItem(at: location, to: destination)
 
-    // Notify Dart layer about completion
-    let taskId = session.configuration.identifier?
-      .replacingOccurrences(of: "\(backgroundSessionPrefix).", with: "") ?? ""
+    let identifier = session.configuration.identifier ?? ""
+    let taskId = identifier
+      .replacingOccurrences(of: "\(backgroundSessionPrefix).", with: "")
     channel.invokeMethod("backgroundDownloadComplete", arguments: [
       "taskId": taskId,
       "destination": destination.path,
@@ -200,9 +205,6 @@ extension TorrentFlowNativeService: URLSessionDownloadDelegate {
                   task: URLSessionTask,
                   didCompleteWithError error: Error?) {
     let identifier = session.configuration.identifier ?? ""
-    if let handler = backgroundCompletionHandlers.removeValue(forKey: identifier) {
-      handler()
-    }
 
     if let error = error {
       let taskId = identifier
@@ -212,15 +214,23 @@ extension TorrentFlowNativeService: URLSessionDownloadDelegate {
         "error": error.localizedDescription,
       ])
     }
+
+    if let handler = backgroundCompletionHandlers.removeValue(forKey: identifier) {
+      handler()
+    }
+    backgroundSessions.removeValue(forKey: identifier)
   }
 }
 
 // MARK: - Keychain
 
 struct KeychainHelper {
+  private static let service = "com.torrentflow.keychain"
+
   static func save(key: String, data: Data) {
     let query: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: service,
       kSecAttrAccount as String: key,
       kSecValueData as String: data,
     ]
@@ -231,6 +241,7 @@ struct KeychainHelper {
   static func load(key: String) -> Data? {
     let query: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: service,
       kSecAttrAccount as String: key,
       kSecReturnData as String: true,
       kSecMatchLimit as String: kSecMatchLimitOne,
@@ -242,6 +253,7 @@ struct KeychainHelper {
 
   static func delete(key: String) {
     SecItemDelete([kSecClass as String: kSecClassGenericPassword,
+                   kSecAttrService as String: service,
                    kSecAttrAccount as String: key] as CFDictionary)
   }
 }

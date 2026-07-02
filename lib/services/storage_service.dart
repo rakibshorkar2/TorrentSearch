@@ -155,9 +155,14 @@ class StorageService {
       'infoHash': task.infoHash,
       'magnetUri': task.magnetUri,
       'torrentPath': task.torrentPath,
+      'downloadUrl': task.downloadUrl,
       'totalSize': task.totalSize,
       'downloadedBytes': task.downloadedBytes,
       'uploadedBytes': task.uploadedBytes,
+      'downloadSpeed': task.downloadSpeed,
+      'uploadSpeed': task.uploadSpeed,
+      'peers': task.peers,
+      'seeders': task.seeders,
       'status': task.status.index,
       'progress': task.progress,
       'savePath': task.savePath,
@@ -171,16 +176,25 @@ class StorageService {
   }
 
   DownloadTask _downloadFromMap(Map<String, dynamic> map) {
+    final statusIdx = map['status'] as int?;
+    final status = statusIdx != null && statusIdx >= 0 && statusIdx < DownloadStatus.values.length
+        ? DownloadStatus.values[statusIdx]
+        : DownloadStatus.paused;
     return DownloadTask(
       id: map['id'] as String? ?? '',
       title: map['title'] as String? ?? '',
       infoHash: map['infoHash']?.toString(),
       magnetUri: map['magnetUri']?.toString(),
       torrentPath: map['torrentPath']?.toString(),
+      downloadUrl: map['downloadUrl']?.toString(),
       totalSize: map['totalSize'] as int? ?? 0,
       downloadedBytes: map['downloadedBytes'] as int? ?? 0,
       uploadedBytes: map['uploadedBytes'] as int? ?? 0,
-      status: DownloadStatus.values[map['status'] as int? ?? 0],
+      downloadSpeed: map['downloadSpeed'] as int? ?? 0,
+      uploadSpeed: map['uploadSpeed'] as int? ?? 0,
+      peers: map['peers'] as int? ?? 0,
+      seeders: map['seeders'] as int? ?? 0,
+      status: status,
       progress: (map['progress'] as num?)?.toDouble() ?? 0,
       savePath: map['savePath'] as String? ?? '',
       addedAt: DateTime.tryParse(map['addedAt']?.toString() ?? '') ?? DateTime.now(),

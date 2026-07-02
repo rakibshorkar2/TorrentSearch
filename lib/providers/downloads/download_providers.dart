@@ -72,10 +72,14 @@ class DownloadTasksNotifier extends StateNotifier<List<DownloadTask>> {
     StreamSubscription<DownloadTask>? sub;
     sub = stream.listen(
       (task) {
+        if (sub != null) {
+          _subscriptions[task.id] = sub;
+        }
         final idx = state.indexWhere((t) => t.id == task.id);
         if (idx >= 0) {
-          state = [...state];
-          state[idx] = task;
+          final updated = [...state];
+          updated[idx] = task;
+          state = updated;
         } else {
           state = [...state, task];
         }
@@ -86,11 +90,13 @@ class DownloadTasksNotifier extends StateNotifier<List<DownloadTask>> {
       onDone: () {
         _persist();
         if (sub != null) {
-          _subscriptions.remove(sub.hashCode.toString());
+          final staleKeys = _subscriptions.keys.where((k) => _subscriptions[k] == sub).toList();
+          for (final key in staleKeys) {
+            _subscriptions.remove(key);
+          }
         }
       },
     );
-    _subscriptions[sub.hashCode.toString()] = sub;
   }
 
   void updateTask(DownloadTask updated) {
@@ -100,6 +106,7 @@ class DownloadTasksNotifier extends StateNotifier<List<DownloadTask>> {
 
   void removeTask(String id) {
     _service.remove(id);
+    _subscriptions.remove(id)?.cancel();
     state = state.where((t) => t.id != id).toList();
     _persist();
   }

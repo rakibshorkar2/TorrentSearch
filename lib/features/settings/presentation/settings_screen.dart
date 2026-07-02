@@ -110,7 +110,7 @@ class SettingsScreen extends ConsumerWidget {
                 icon: CupertinoIcons.sun_max,
                 title: 'Keep Screen Awake',
                 subtitle: settings.screenAwakeMinutes != null
-                    ? '${settings.screenAwakeMinutes} minutes'
+                    ? _formatDuration(settings.screenAwakeMinutes!)
                     : 'Disabled',
                 trailing: CupertinoSwitch(
                   value: settings.screenAwakeMinutes != null,
@@ -326,12 +326,27 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
+  String _formatDuration(int totalMinutes) {
+    final hours = totalMinutes ~/ 60;
+    final mins = totalMinutes % 60;
+    if (hours > 0 && mins > 0) return '$hours hr $mins min';
+    if (hours > 0) return '$hours hr';
+    return '$mins min';
+  }
+
   void _showAwakeDurationPicker(BuildContext context, WidgetRef ref, AppSettings settings) {
-    final durations = [5, 15, 30, 60, 120];
+    final current = settings.screenAwakeMinutes ?? 30;
+    int selectedHours = current ~/ 60;
+    int selectedMinutes = current % 60;
+    if (selectedMinutes == 0 && current == 0) selectedMinutes = 30;
+
+    final hours = List.generate(13, (i) => i);
+    final minutes = [0, 5, 10, 15, 30, 45];
+
     showCupertinoModalPopup(
       context: context,
       builder: (ctx) => Container(
-        height: 260,
+        height: 280,
         color: CupertinoTheme.brightnessOf(context) == Brightness.dark
             ? TorrentFlowTheme.darkSurface : TorrentFlowTheme.lightSurface,
         child: Column(
@@ -345,7 +360,7 @@ class SettingsScreen extends ConsumerWidget {
                     child: const Text('Cancel'),
                     onPressed: () => Navigator.of(ctx).pop(),
                   ),
-                  Text('Duration', style: TorrentFlowTheme.headline),
+                  Text('Keep Awake', style: TorrentFlowTheme.headline),
                   CupertinoButton(
                     child: const Text('Done'),
                     onPressed: () => Navigator.of(ctx).pop(),
@@ -354,19 +369,49 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ),
             Expanded(
-              child: CupertinoPicker(
-                itemExtent: 40,
-                onSelectedItemChanged: (i) {
-                  ref.read(settingsProvider.notifier).update(
-                    settings.copyWith(screenAwakeMinutes: durations[i]),
-                  );
-                },
-                children: durations.map((v) => Center(
-                  child: Text('$v min', style: TorrentFlowTheme.body.copyWith(
-                    color: CupertinoTheme.brightnessOf(context) == Brightness.dark
-                        ? TorrentFlowTheme.darkText : TorrentFlowTheme.lightText,
-                  )),
-                )).toList(),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: CupertinoPicker(
+                      scrollController: FixedExtentScrollController(initialItem: selectedHours),
+                      itemExtent: 40,
+                      onSelectedItemChanged: (i) {
+                        selectedHours = hours[i];
+                        final total = selectedHours * 60 + selectedMinutes;
+                        ref.read(settingsProvider.notifier).update(
+                          settings.copyWith(screenAwakeMinutes: total > 0 ? total : null),
+                        );
+                      },
+                      children: hours.map((v) => Center(
+                        child: Text('$v hr', style: TorrentFlowTheme.body.copyWith(
+                          color: CupertinoTheme.brightnessOf(context) == Brightness.dark
+                              ? TorrentFlowTheme.darkText : TorrentFlowTheme.lightText,
+                        )),
+                      )).toList(),
+                    ),
+                  ),
+                  Expanded(
+                    child: CupertinoPicker(
+                      scrollController: FixedExtentScrollController(
+                        initialItem: minutes.indexOf(selectedMinutes).clamp(0, minutes.length - 1),
+                      ),
+                      itemExtent: 40,
+                      onSelectedItemChanged: (i) {
+                        selectedMinutes = minutes[i];
+                        final total = selectedHours * 60 + selectedMinutes;
+                        ref.read(settingsProvider.notifier).update(
+                          settings.copyWith(screenAwakeMinutes: total > 0 ? total : null),
+                        );
+                      },
+                      children: minutes.map((v) => Center(
+                        child: Text('$v min', style: TorrentFlowTheme.body.copyWith(
+                          color: CupertinoTheme.brightnessOf(context) == Brightness.dark
+                              ? TorrentFlowTheme.darkText : TorrentFlowTheme.lightText,
+                        )),
+                      )).toList(),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
