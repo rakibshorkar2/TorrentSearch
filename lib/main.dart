@@ -2,11 +2,14 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
 import 'core/native/native_service.dart';
-import 'providers/app_providers.dart';
+import 'providers/downloads/download_providers.dart';
+import 'services/storage_service.dart';
 
-
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final storage = StorageService();
+  await storage.init();
+
   runApp(
     const ProviderScope(
       child: TorrentFlowAppStartup(),

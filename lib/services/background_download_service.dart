@@ -3,7 +3,9 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/native/native_service.dart';
 import '../models/torrent.dart';
-import '../providers/app_providers.dart';
+import '../providers/downloads/download_providers.dart';
+import '../logging/app_logger.dart';
+import '../providers/settings/settings_providers.dart';
 import 'download_service.dart';
 
 class BackgroundDownloadService {
@@ -13,7 +15,6 @@ class BackgroundDownloadService {
 
   bool _isInitialized = false;
   Timer? _keepAliveTimer;
-  StreamSubscription<Duration>? _foregroundSubscription;
   final Map<String, DownloadTask> _pendingBackgroundTasks = {};
 
   BackgroundDownloadService(this._downloadService, this._ref);
@@ -97,6 +98,7 @@ class BackgroundDownloadService {
     if (error != null) {
       _downloadService.remove(taskId);
       notifyDownloadError(task.title, error);
+      appLogger.e('Background download $taskId failed: $error');
     } else {
       final completedTask = task.copyWith(
         status: DownloadStatus.completed,
@@ -105,6 +107,7 @@ class BackgroundDownloadService {
       );
       _ref.read(downloadTasksProvider.notifier).updateTask(completedTask);
       notifyDownloadComplete(task.title);
+      appLogger.i('Background download $taskId completed');
     }
   }
 
@@ -130,6 +133,5 @@ class BackgroundDownloadService {
 
   void dispose() {
     _keepAliveTimer?.cancel();
-    _foregroundSubscription?.cancel();
   }
 }

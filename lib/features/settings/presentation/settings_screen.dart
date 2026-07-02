@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../models/app_settings.dart';
-import '../../../providers/app_providers.dart';
+import '../../../providers/settings/settings_providers.dart';
+import '../../../providers/downloads/download_providers.dart';
+import '../../files/presentation/file_browser_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -67,6 +69,63 @@ class SettingsScreen extends ConsumerWidget {
                 ),
                 isDark: isDark,
               ),
+              _Divider(isDark: isDark),
+              _SettingTile(
+                icon: CupertinoIcons.clock,
+                title: 'Save Search History',
+                trailing: CupertinoSwitch(
+                  value: settings.saveSearchHistory,
+                  onChanged: (v) => ref.read(settingsProvider.notifier).update(
+                    settings.copyWith(saveSearchHistory: v),
+                  ),
+                ),
+                isDark: isDark,
+              ),
+              _Divider(isDark: isDark),
+              _SettingTile(
+                icon: CupertinoIcons.hand_raised,
+                title: 'Haptic Feedback',
+                trailing: CupertinoSwitch(
+                  value: settings.hapticFeedback,
+                  onChanged: (v) => ref.read(settingsProvider.notifier).update(
+                    settings.copyWith(hapticFeedback: v),
+                  ),
+                ),
+                isDark: isDark,
+              ),
+              _Divider(isDark: isDark),
+              _SettingTile(
+                icon: CupertinoIcons.question_circle,
+                title: 'Confirm Before Download',
+                trailing: CupertinoSwitch(
+                  value: settings.confirmBeforeDownload,
+                  onChanged: (v) => ref.read(settingsProvider.notifier).update(
+                    settings.copyWith(confirmBeforeDownload: v),
+                  ),
+                ),
+                isDark: isDark,
+              ),
+              _Divider(isDark: isDark),
+              _SettingTile(
+                icon: CupertinoIcons.sun_max,
+                title: 'Keep Screen Awake',
+                subtitle: settings.screenAwakeMinutes != null
+                    ? '${settings.screenAwakeMinutes} minutes'
+                    : 'Disabled',
+                trailing: CupertinoSwitch(
+                  value: settings.screenAwakeMinutes != null,
+                  onChanged: (v) {
+                    if (v) {
+                      _showAwakeDurationPicker(context, ref, settings);
+                    } else {
+                      ref.read(settingsProvider.notifier).update(
+                        settings.copyWith(screenAwakeMinutes: null),
+                      );
+                    }
+                  },
+                ),
+                isDark: isDark,
+              ),
             ]),
             _SectionHeader(title: 'Downloads', isDark: isDark),
             _SettingsGroup(children: [
@@ -121,9 +180,36 @@ class SettingsScreen extends ConsumerWidget {
               ),
               _Divider(isDark: isDark),
               _SettingTile(
+                icon: CupertinoIcons.cloud_download,
+                title: 'Auto-Download from Seedr',
+                subtitle: 'Auto-download completed torrents from Seedr',
+                trailing: CupertinoSwitch(
+                  value: settings.autoDownloadCompletedSeedr,
+                  onChanged: (v) => ref.read(settingsProvider.notifier).update(
+                    settings.copyWith(autoDownloadCompletedSeedr: v),
+                  ),
+                ),
+                isDark: isDark,
+              ),
+              _Divider(isDark: isDark),
+              _SettingTile(
                 icon: CupertinoIcons.moon_zzz,
                 title: 'Background Downloads',
-                subtitle: 'Active — Torrents keep app alive; Seedr uses URLSession',
+                subtitle: 'Active',
+                isDark: isDark,
+              ),
+            ]),
+            _SectionHeader(title: 'Files', isDark: isDark),
+            _SettingsGroup(children: [
+              _SettingTile(
+                icon: CupertinoIcons.folder,
+                title: 'File Browser',
+                subtitle: 'Browse downloaded files',
+                onTap: () {
+                  Navigator.of(context).push(
+                    CupertinoPageRoute(builder: (_) => const FileBrowserScreen()),
+                  );
+                },
                 isDark: isDark,
               ),
             ]),
@@ -135,10 +221,44 @@ class SettingsScreen extends ConsumerWidget {
                 subtitle: '${AppConstants.appVersion} (${AppConstants.appBuild})',
                 isDark: isDark,
               ),
+              _Divider(isDark: isDark),
+              _SettingTile(
+                icon: CupertinoIcons.globe,
+                title: 'Search Sources',
+                subtitle: 'TPB, 1337x, YTS, EZTV, Nyaa.si',
+                isDark: isDark,
+              ),
+              _Divider(isDark: isDark),
+              _SettingTile(
+                icon: CupertinoIcons.ant,
+                title: 'Clear All Downloads',
+                onTap: () => _confirmClearDownloads(context, ref),
+                isDark: isDark,
+              ),
             ]),
             const SizedBox(height: 40),
           ],
         ),
+      ),
+    );
+  }
+
+  void _confirmClearDownloads(BuildContext context, WidgetRef ref) {
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Clear All Downloads'),
+        content: const Text('This will remove all download tasks. Completed files will remain on disk.'),
+        actions: [
+          CupertinoButton(child: const Text('Cancel'), onPressed: () => Navigator.of(ctx).pop()),
+          CupertinoButton(
+            child: Text('Clear', style: TextStyle(color: TorrentFlowTheme.error)),
+            onPressed: () {
+              ref.read(downloadTasksProvider.notifier).removeCompleted();
+              Navigator.of(ctx).pop();
+            },
+          ),
+        ],
       ),
     );
   }
@@ -199,6 +319,55 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
+  void _showAwakeDurationPicker(BuildContext context, WidgetRef ref, AppSettings settings) {
+    final durations = [5, 15, 30, 60, 120];
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => Container(
+        height: 260,
+        color: CupertinoTheme.brightnessOf(context) == Brightness.dark
+            ? TorrentFlowTheme.darkSurface : TorrentFlowTheme.lightSurface,
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  CupertinoButton(
+                    child: const Text('Cancel'),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                  ),
+                  Text('Duration', style: TorrentFlowTheme.headline),
+                  CupertinoButton(
+                    child: const Text('Done'),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: CupertinoPicker(
+                itemExtent: 40,
+                onSelectedItemChanged: (i) {
+                  ref.read(settingsProvider.notifier).update(
+                    settings.copyWith(screenAwakeMinutes: durations[i]),
+                  );
+                },
+                children: durations.map((v) => Center(
+                  child: Text('$v min', style: TorrentFlowTheme.body.copyWith(
+                    color: CupertinoTheme.brightnessOf(context) == Brightness.dark
+                        ? TorrentFlowTheme.darkText : TorrentFlowTheme.lightText,
+                  )),
+                )).toList(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showSpeedDialog(BuildContext context, WidgetRef ref, AppSettings settings, String type) {
     final controller = TextEditingController(
       text: type == 'download'
@@ -233,7 +402,6 @@ class SettingsScreen extends ConsumerWidget {
       ),
     );
   }
-
 }
 
 class _SectionHeader extends StatelessWidget {

@@ -2,11 +2,14 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/seedr_item.dart';
 import '../core/constants/app_constants.dart';
+import '../logging/app_logger.dart';
 
 class SeedrService {
   final Dio _dio;
   final FlutterSecureStorage _storage;
   String? _token;
+  String? _currentAccount;
+  static const String _accountsKey = 'seedr_accounts';
 
   SeedrService()
       : _dio = Dio(BaseOptions(
@@ -16,8 +19,44 @@ class SeedrService {
         )),
         _storage = const FlutterSecureStorage();
 
+  Future<List<String>> loadSavedAccounts() async {
+    final data = await _storage.read(key: _accountsKey);
+    if (data == null || data.isEmpty) return [];
+    return data.split(',').where((e) => e.isNotEmpty).toList();
+  }
+
+  Future<void> saveAccount(String email) async {
+    final accounts = await loadSavedAccounts();
+    if (!accounts.contains(email)) {
+      accounts.add(email);
+      await _storage.write(key: _accountsKey, value: accounts.join(','));
+    }
+  }
+
+  Future<void> removeAccount(String email) async {
+    final accounts = await loadSavedAccounts();
+    accounts.remove(email);
+    await _storage.write(key: _accountsKey, value: accounts.join(','));
+    await _storage.delete(key: '${AppConstants.keychainSeedrToken}_$email');
+  }
+
+  Future<bool> isLoggedInForAccount(String email) async {
+    _token = await _storage.read(key: '${AppConstants.keychainSeedrToken}_$email');
+    if (_token != null && _token!.isNotEmpty) {
+      _currentAccount = email;
+      _dio.options.headers['Authorization'] = 'Bearer $_token';
+      return true;
+    }
+    return false;
+  }
+
   Future<bool> isLoggedIn() async {
-    _token ??= await _storage.read(key: AppConstants.keychainSeedrToken);
+    final accounts = await loadSavedAccounts();
+    for (final email in accounts) {
+      final loggedIn = await isLoggedInForAccount(email);
+      if (loggedIn) return true;
+    }
+    _token = await _storage.read(key: AppConstants.keychainSeedrToken);
     if (_token != null && _token!.isNotEmpty) {
       _dio.options.headers['Authorization'] = 'Bearer $_token';
       return true;
@@ -33,19 +72,27 @@ class SeedrService {
       });
       _token = response.data['token']?.toString();
       if (_token != null && _token!.isNotEmpty) {
-        await _storage.write(key: AppConstants.keychainSeedrToken, value: _token!);
+        _currentAccount = email;
+        await _storage.write(key: '${AppConstants.keychainSeedrToken}_$email', value: _token!);
+        await saveAccount(email);
         _dio.options.headers['Authorization'] = 'Bearer $_token';
       } else {
         throw SeedrException('Login failed: Invalid credentials');
       }
     } on DioException catch (e) {
+      appLogger.e('Seedr login failed', error: e);
       throw SeedrException('Login failed: ${e.message}');
     }
   }
 
   Future<void> logout() async {
+    if (_currentAccount != null) {
+      await _storage.delete(key: '${AppConstants.keychainSeedrToken}_$_currentAccount');
+    } else {
+      await _storage.delete(key: AppConstants.keychainSeedrToken);
+    }
     _token = null;
-    await _storage.delete(key: AppConstants.keychainSeedrToken);
+    _currentAccount = null;
     _dio.options.headers.remove('Authorization');
   }
 
@@ -56,7 +103,7 @@ class SeedrService {
       return SeedrAccount(
         usedStorage: response.data['space_used'] ?? 0,
         totalStorage: response.data['space_max'] ?? 0,
-        email: response.data['email']?.toString(),
+        email: response.data['email']?.toString() ?? _currentAccount,
       );
     } on DioException catch (e) {
       throw SeedrException('Failed to get account: ${e.message}');
@@ -124,6 +171,7 @@ class SeedrService {
           size: f.size,
           type: SeedrItemType.file,
           downloadUrl: f.downloadUrl,
+          streamUrl: f.streamUrl,
         )).toList();
       }
       final folders = await getFolders();

@@ -9,6 +9,12 @@ class TorrentInfo {
   final DateTime uploadDate;
   final String? category;
   final String? fileUrl;
+  final String? source;
+  final String? quality;
+  final bool isVideo;
+  final bool isAudio;
+  final bool isGame;
+  final bool isApp;
 
   TorrentInfo({
     required this.id,
@@ -21,12 +27,19 @@ class TorrentInfo {
     required this.uploadDate,
     this.category,
     this.fileUrl,
+    this.source,
+    this.quality,
+    this.isVideo = false,
+    this.isAudio = false,
+    this.isGame = false,
+    this.isApp = false,
   });
 
   factory TorrentInfo.fromJson(Map<String, dynamic> json) {
+    final title = (json['name'] ?? json['title'] ?? 'Unknown').toString();
     return TorrentInfo(
       id: (json['id'] ?? '').toString(),
-      title: (json['name'] ?? json['title'] ?? 'Unknown').toString(),
+      title: title,
       magnetUri: json['magnet']?.toString(),
       infoHash: json['info_hash']?.toString(),
       size: int.tryParse(json['size']?.toString() ?? '0') ?? 0,
@@ -35,20 +48,80 @@ class TorrentInfo {
       uploadDate: DateTime.tryParse(json['added']?.toString() ?? '') ?? DateTime.now(),
       category: json['category']?.toString(),
       fileUrl: json['download_url']?.toString(),
+      source: json['source']?.toString(),
+      quality: parseQuality(title),
+      isVideo: _isVideo(title, json['category']?.toString()),
+      isAudio: _isAudio(title, json['category']?.toString()),
+      isGame: _isGame(title, json['category']?.toString()),
+      isApp: _isApp(title, json['category']?.toString()),
     );
   }
 
+  static String? parseQuality(String title) {
+    final lower = title.toLowerCase();
+    final qualities = ['2160p', '1080p', '720p', '480p', '4k', 'uhd'];
+    for (final q in qualities) {
+      if (lower.contains(q)) return q;
+    }
+    if (lower.contains('hdr') || lower.contains('bluray') || lower.contains('blu-ray')) return 'HD';
+    if (lower.contains('hdrip') || lower.contains('webrip') || lower.contains('web-dl')) return 'HD';
+    if (lower.contains('dvdrip') || lower.contains('dvd')) return 'SD';
+    return null;
+  }
+
+  static bool _isVideo(String title, String? category) {
+    if (category == '200' || category == '201' || category == '202' || category == '203') return true;
+    final lower = title.toLowerCase();
+    return lower.contains('movie') || lower.contains('film') || lower.contains('episode') ||
+           lower.contains('s0') || lower.contains('s1') || lower.contains('s2') ||
+           lower.contains('s3') || lower.contains('s4') || lower.contains('s5') ||
+           lower.contains('s6') || lower.contains('s7') || lower.contains('s8') || lower.contains('s9');
+  }
+
+  static bool _isAudio(String title, String? category) {
+    if (category == '100' || category == '101') return true;
+    final lower = title.toLowerCase();
+    return lower.contains('mp3') || lower.contains('flac') || lower.contains('album') ||
+           lower.contains('soundtrack') || lower.contains('ost');
+  }
+
+  static bool _isGame(String title, String? category) {
+    if (category == '400' || category == '401' || category == '402') return true;
+    final lower = title.toLowerCase();
+    return lower.contains('game') || lower.contains('iso') || lower.contains('ps4') ||
+           lower.contains('ps5') || lower.contains('xbox') || lower.contains('switch') ||
+           lower.contains('nintendo') || lower.contains('steam');
+  }
+
+  static bool _isApp(String title, String? category) {
+    if (category == '300' || category == '301' || category == '302' || category == '303') return true;
+    final lower = title.toLowerCase();
+    return lower.contains('windows') || lower.contains('macos') || lower.contains('linux') ||
+           lower.contains('software') || lower.contains('app') || lower.contains('crack');
+  }
+
   String get formattedSize => _formatBytes(size);
-  String get health => seeders > 0
-      ? (leechers > 0 ? (seeders / leechers).toStringAsFixed(1) : 'Excellent')
-      : 'Dead';
+
+  String get health {
+    if (seeders <= 0) return 'Dead';
+    if (leechers <= 0) return 'Excellent';
+    final ratio = seeders / leechers;
+    if (ratio >= 5) return 'Excellent';
+    if (ratio >= 2) return 'Good';
+    if (ratio >= 1) return 'Ok';
+    return 'Poor';
+  }
+
+  double get healthRatio {
+    if (seeders <= 0) return 0;
+    if (leechers <= 0) return 5;
+    return (seeders / leechers).clamp(0, 5);
+  }
 
   static String _formatBytes(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-    }
+    if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 }
@@ -67,6 +140,8 @@ enum DownloadStatus {
   bool get isFinished => this == completed;
   bool get isStopped => this == paused || this == stopped;
 }
+
+enum DownloadPriority { low, normal, high }
 
 class DownloadTask {
   final String id;
@@ -90,6 +165,7 @@ class DownloadTask {
   final List<int> selectedFileIndices;
   final int? downloadLimit;
   final int? uploadLimit;
+  final DownloadPriority priority;
 
   const DownloadTask({
     required this.id,
@@ -113,6 +189,7 @@ class DownloadTask {
     this.selectedFileIndices = const [],
     this.downloadLimit,
     this.uploadLimit,
+    this.priority = DownloadPriority.normal,
   });
 
   String get formattedProgress => '${(progress * 100).toStringAsFixed(1)}%';
@@ -144,6 +221,7 @@ class DownloadTask {
     List<int>? selectedFileIndices,
     int? downloadLimit,
     int? uploadLimit,
+    DownloadPriority? priority,
   }) {
     return DownloadTask(
       id: id ?? this.id,
@@ -167,15 +245,14 @@ class DownloadTask {
       selectedFileIndices: selectedFileIndices ?? this.selectedFileIndices,
       downloadLimit: downloadLimit ?? this.downloadLimit,
       uploadLimit: uploadLimit ?? this.uploadLimit,
+      priority: priority ?? this.priority,
     );
   }
 
   static String _formatBytes(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-    }
+    if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 }

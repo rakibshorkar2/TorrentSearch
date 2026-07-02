@@ -1,14 +1,18 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:dio/dio.dart';
 import '../models/torrent.dart';
 import '../core/constants/app_constants.dart';
+import '../logging/app_logger.dart';
 
 class DownloadService {
   final Dio _dio;
   final Map<String, CancelToken> _cancelTokens = {};
   final Map<String, StreamController<DownloadTask>> _controllers = {};
   final List<DownloadTask> _tasks = [];
+  final Map<String, int> _retryCounts = {};
   int _taskCounter = 0;
+  static const int _maxRetries = 3;
 
   DownloadService() : _dio = Dio(BaseOptions(
     connectTimeout: AppConstants.connectionTimeout,
@@ -21,6 +25,8 @@ class DownloadService {
     required String savePath,
     String? magnetUri,
     String? infoHash,
+    int? downloadLimit,
+    int? uploadLimit,
   }) {
     final id = 'task_${++_taskCounter}';
     final controller = StreamController<DownloadTask>.broadcast();
@@ -36,6 +42,8 @@ class DownloadService {
       savePath: savePath,
       addedAt: DateTime.now(),
       status: DownloadStatus.queued,
+      downloadLimit: downloadLimit,
+      uploadLimit: uploadLimit,
     );
     _tasks.add(initial);
     controller.add(initial);
@@ -44,9 +52,9 @@ class DownloadService {
     return controller.stream;
   }
 
-  void _startDownload(String id, String url, StreamController<DownloadTask> controller) {
+  void _startDownload(String id, String url, StreamController<DownloadTask> controller, {bool isRetry = false}) {
     if (!_canResolveUrl(url)) {
-      controller.addError(Exception('Cannot download: invalid URL $url'));
+      controller.addError(Exception('Cannot download: unsupported URL $url'));
       _cleanup(id);
       return;
     }
@@ -55,11 +63,19 @@ class DownloadService {
 
     int lastBytes = 0;
     DateTime lastTime = DateTime.now();
+    final cancelToken = _cancelTokens[id];
+
+    if (cancelToken == null) {
+      controller.addError(Exception('Download cancelled'));
+      return;
+    }
+
+    _ensureDirectory(savePathForId(id));
 
     _dio.download(
       url,
-      _resolvePath(id),
-      cancelToken: _cancelTokens[id],
+      savePathForId(id),
+      cancelToken: cancelToken,
       onReceiveProgress: (received, total) {
         if (!controller.isClosed && total > 0) {
           final now = DateTime.now();
@@ -98,9 +114,16 @@ class DownloadService {
       if (error is DioException && CancelToken.isCancel(error)) {
         _updateTaskById(id, status: DownloadStatus.paused);
         controller.add(_tasks.firstWhere((t) => t.id == id));
+      } else if (!isRetry && _retryCounts.containsKey(id) && _retryCounts[id]! < _maxRetries) {
+        _retryCounts[id] = (_retryCounts[id] ?? 0) + 1;
+        appLogger.w('Retrying download $id (attempt ${_retryCounts[id]})');
+        Future.delayed(const Duration(seconds: 5), () {
+          _startDownload(id, url, controller, isRetry: true);
+        });
       } else {
         _updateTaskById(id, status: DownloadStatus.error);
         controller.add(_tasks.firstWhere((t) => t.id == id));
+        appLogger.e('Download $id failed', error: error);
       }
     });
   }
@@ -110,7 +133,14 @@ class DownloadService {
     return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('ftp://');
   }
 
-  String _resolvePath(String id) {
+  void _ensureDirectory(String path) {
+    final dir = Directory(path).parent;
+    if (!dir.existsSync()) {
+      dir.createSync(recursive: true);
+    }
+  }
+
+  String savePathForId(String id) {
     final idx = _tasks.indexWhere((t) => t.id == id);
     return idx >= 0 ? _tasks[idx].savePath : '/dev/null';
   }
@@ -136,7 +166,7 @@ class DownloadService {
             : '';
 
     if (!_canResolveUrl(url)) {
-      controller.addError(Exception('Cannot resume download: no valid URL'));
+      controller.addError(Exception('Cannot resume: no valid URL'));
       return controller.stream;
     }
 
@@ -147,7 +177,24 @@ class DownloadService {
   void remove(String taskId) {
     _cancelTokens[taskId]?.cancel();
     _tasks.removeWhere((t) => t.id == taskId);
+    _retryCounts.remove(taskId);
     _cleanup(taskId);
+  }
+
+  Stream<DownloadTask> retry(String taskId) {
+    final idx = _tasks.indexWhere((t) => t.id == taskId);
+    if (idx < 0) return const Stream.empty();
+    final task = _tasks[idx];
+
+    final url = task.magnetUri?.isNotEmpty == true ? task.magnetUri! : task.torrentPath ?? '';
+    if (url.isEmpty) return const Stream.empty();
+
+    _retryCounts[taskId] = 0;
+    final controller = StreamController<DownloadTask>.broadcast();
+    _controllers[taskId] = controller;
+    _cancelTokens[taskId] = CancelToken();
+    _startDownload(taskId, url, controller, isRetry: true);
+    return controller.stream;
   }
 
   List<DownloadTask> getTasks() => List.unmodifiable(_tasks);
@@ -155,6 +202,10 @@ class DownloadService {
   DownloadTask? getTask(String id) {
     final idx = _tasks.indexWhere((t) => t.id == id);
     return idx >= 0 ? _tasks[idx] : null;
+  }
+
+  void updatePriority(String taskId, DownloadPriority priority) {
+    _updateTaskById(taskId, priority: priority);
   }
 
   void _updateTaskById(String id, {
@@ -169,6 +220,8 @@ class DownloadService {
     int? peers,
     int? seeders,
     DateTime? completedAt,
+    Duration? eta,
+    DownloadPriority? priority,
   }) {
     final idx = _tasks.indexWhere((t) => t.id == id);
     if (idx < 0) return;
@@ -185,6 +238,8 @@ class DownloadService {
       peers: peers,
       seeders: seeders,
       completedAt: completedAt,
+      eta: eta,
+      priority: priority,
     );
   }
 
@@ -203,5 +258,6 @@ class DownloadService {
     _cancelTokens.clear();
     _controllers.clear();
     _tasks.clear();
+    _retryCounts.clear();
   }
 }

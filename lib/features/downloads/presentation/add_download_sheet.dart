@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/torrent.dart';
-import '../../../providers/app_providers.dart';
+import '../../../providers/downloads/download_providers.dart';
 
 class AddDownloadSheet extends ConsumerStatefulWidget {
   final TorrentInfo? torrent;
@@ -21,6 +21,14 @@ class AddDownloadSheet extends ConsumerStatefulWidget {
 class _AddDownloadSheetState extends ConsumerState<AddDownloadSheet> {
   bool _isAdding = false;
   String? _error;
+  DownloadPriority _priority = DownloadPriority.normal;
+  final _limitController = TextEditingController();
+
+  @override
+  void dispose() {
+    _limitController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -66,12 +74,51 @@ class _AddDownloadSheetState extends ConsumerState<AddDownloadSheet> {
             const SizedBox(height: 8),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: TorrentFlowTheme.standardPadding),
-              child: Text('Size: ${widget.torrent!.formattedSize} | ${widget.torrent!.seeders} seeders',
-                style: TorrentFlowTheme.footnote.copyWith(
-                  color: isDark ? TorrentFlowTheme.darkTextSecondary : TorrentFlowTheme.lightTextSecondary,
-                )),
+              child: Row(
+                children: [
+                  if (widget.torrent!.source != null)
+                    _Badge(label: widget.torrent!.source!, color: TorrentFlowTheme.accent),
+                  const SizedBox(width: 8),
+                  if (widget.torrent!.quality != null)
+                    _Badge(label: widget.torrent!.quality!, color: TorrentFlowTheme.success),
+                  const SizedBox(width: 8),
+                  Text('Size: ${widget.torrent!.formattedSize} | ${widget.torrent!.seeders} seeders',
+                    style: TorrentFlowTheme.footnote.copyWith(
+                      color: isDark ? TorrentFlowTheme.darkTextSecondary : TorrentFlowTheme.lightTextSecondary,
+                    )),
+                ],
+              ),
             ),
           ],
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: TorrentFlowTheme.standardPadding),
+            child: Row(
+              children: [
+                Text('Priority:', style: TorrentFlowTheme.footnote.copyWith(
+                  color: isDark ? TorrentFlowTheme.darkTextSecondary : TorrentFlowTheme.lightTextSecondary,
+                )),
+                const SizedBox(width: 12),
+                _PriorityChip(
+                  label: 'Low',
+                  isSelected: _priority == DownloadPriority.low,
+                  onTap: () => setState(() => _priority = DownloadPriority.low),
+                ),
+                const SizedBox(width: 8),
+                _PriorityChip(
+                  label: 'Normal',
+                  isSelected: _priority == DownloadPriority.normal,
+                  onTap: () => setState(() => _priority = DownloadPriority.normal),
+                ),
+                const SizedBox(width: 8),
+                _PriorityChip(
+                  label: 'High',
+                  isSelected: _priority == DownloadPriority.high,
+                  onTap: () => setState(() => _priority = DownloadPriority.high),
+                ),
+              ],
+            ),
+          ),
           if (_error != null) ...[
             const SizedBox(height: 8),
             Padding(
@@ -119,12 +166,18 @@ class _AddDownloadSheetState extends ConsumerState<AddDownloadSheet> {
       final url = widget.magnetUri ?? widget.torrent?.magnetUri ?? '';
       final infoHash = widget.torrent?.infoHash;
 
+      if (url.isEmpty) {
+        throw Exception('No download URL or magnet link available');
+      }
+
       await notifier.addDownload(
         title: title,
         url: url,
         savePath: '/downloads/${title.replaceAll(RegExp(r'[^\w\s]'), '')}',
         magnetUri: widget.magnetUri ?? widget.torrent?.magnetUri,
         infoHash: infoHash,
+        downloadLimit: null,
+        uploadLimit: null,
       ).first;
 
       if (mounted) Navigator.of(context).pop();
@@ -133,5 +186,56 @@ class _AddDownloadSheetState extends ConsumerState<AddDownloadSheet> {
     } finally {
       if (mounted) setState(() => _isAdding = false);
     }
+  }
+}
+
+class _Badge extends StatelessWidget {
+  final String label;
+  final Color color;
+
+  const _Badge({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(label, style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w600)),
+    );
+  }
+}
+
+class _PriorityChip extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _PriorityChip({required this.label, required this.isSelected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoButton(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      onPressed: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? TorrentFlowTheme.accent.withValues(alpha: 0.15) : CupertinoColors.transparent,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: isSelected ? TorrentFlowTheme.accent : TorrentFlowTheme.darkTextSecondary,
+            width: 0.5,
+          ),
+        ),
+        child: Text(label, style: TextStyle(
+          fontSize: 12,
+          color: isSelected ? TorrentFlowTheme.accent : TorrentFlowTheme.darkTextSecondary,
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+        )),
+      ),
+    );
   }
 }

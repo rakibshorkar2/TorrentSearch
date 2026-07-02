@@ -1,8 +1,9 @@
+import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/cupertino_theme.dart';
-import 'providers/app_providers.dart';
+import 'providers/settings/settings_providers.dart';
 import 'features/search/presentation/search_screen.dart';
 import 'features/downloads/presentation/downloads_screen.dart';
 import 'features/seedr/presentation/seedr_screen.dart';
@@ -14,7 +15,10 @@ class TorrentFlowApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider);
-    final isDark = settings.useDarkMode;
+    ref.watch(screenAwakeProvider);
+    final isDark = settings.followSystemTheme
+        ? PlatformDispatcher.instance.platformBrightness == Brightness.dark
+        : settings.useDarkMode;
     final theme = isDark
         ? TorrentFlowCupertinoTheme.darkTheme()
         : TorrentFlowCupertinoTheme.lightTheme();

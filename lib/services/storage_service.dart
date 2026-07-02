@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/torrent.dart';
 import '../models/app_settings.dart';
 import '../core/constants/app_constants.dart';
+import '../logging/app_logger.dart';
 
 class StorageService {
   late Box<String> _settingsBox;
@@ -36,8 +37,14 @@ class StorageService {
         downloadSpeedLimit: map['downloadSpeedLimit'] as int? ?? 0,
         uploadSpeedLimit: map['uploadSpeedLimit'] as int? ?? 0,
         connectionTimeout: map['connectionTimeout'] as int? ?? 10,
+        hapticFeedback: map['hapticFeedback'] as bool? ?? true,
+        confirmBeforeDownload: map['confirmBeforeDownload'] as bool? ?? true,
+        autoDownloadCompletedSeedr: map['autoDownloadCompletedSeedr'] as bool? ?? false,
+        saveSearchHistory: map['saveSearchHistory'] as bool? ?? true,
+        screenAwakeMinutes: map['screenAwakeMinutes'] as int?,
       );
-    } catch (_) {
+    } catch (e) {
+      appLogger.e('Failed to parse settings', error: e);
       return const AppSettings();
     }
   }
@@ -55,6 +62,11 @@ class StorageService {
       'downloadSpeedLimit': settings.downloadSpeedLimit,
       'uploadSpeedLimit': settings.uploadSpeedLimit,
       'connectionTimeout': settings.connectionTimeout,
+      'hapticFeedback': settings.hapticFeedback,
+      'confirmBeforeDownload': settings.confirmBeforeDownload,
+      'autoDownloadCompletedSeedr': settings.autoDownloadCompletedSeedr,
+      'saveSearchHistory': settings.saveSearchHistory,
+      'screenAwakeMinutes': settings.screenAwakeMinutes,
     };
     await _settingsBox.put('settings', jsonEncode(map));
   }
@@ -66,7 +78,8 @@ class StorageService {
     try {
       final list = jsonDecode(json) as List;
       return list.map((item) => _downloadFromMap(item as Map<String, dynamic>)).toList();
-    } catch (_) {
+    } catch (e) {
+      appLogger.e('Failed to parse downloads', error: e);
       return [];
     }
   }
@@ -128,6 +141,9 @@ class StorageService {
       'addedAt': task.addedAt.toIso8601String(),
       'completedAt': task.completedAt?.toIso8601String(),
       'selectedFileIndices': task.selectedFileIndices,
+      'downloadLimit': task.downloadLimit,
+      'uploadLimit': task.uploadLimit,
+      'priority': task.priority.index,
     };
   }
 
@@ -147,6 +163,9 @@ class StorageService {
       addedAt: DateTime.tryParse(map['addedAt']?.toString() ?? '') ?? DateTime.now(),
       completedAt: DateTime.tryParse(map['completedAt']?.toString() ?? ''),
       selectedFileIndices: (map['selectedFileIndices'] as List?)?.cast<int>() ?? [],
+      downloadLimit: map['downloadLimit'] as int?,
+      uploadLimit: map['uploadLimit'] as int?,
+      priority: DownloadPriority.values[map['priority'] as int? ?? 1],
     );
   }
 }
