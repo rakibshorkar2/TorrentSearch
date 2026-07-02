@@ -4,10 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/cupertino_theme.dart';
 import 'providers/settings/settings_providers.dart';
-import 'features/search/presentation/search_screen.dart';
 import 'features/downloads/presentation/downloads_screen.dart';
-import 'features/history/presentation/history_screen.dart';
-import 'features/seedr/presentation/seedr_screen.dart';
+import 'features/add_torrent/presentation/add_torrent_screen.dart';
 import 'features/settings/presentation/settings_screen.dart';
 
 class TorrentFlowApp extends ConsumerWidget {
@@ -46,10 +44,8 @@ class _MainShellState extends ConsumerState<MainShell> {
   int _currentIndex = 0;
 
   final _screens = const [
-    SearchScreen(),
     DownloadsScreen(),
-    HistoryScreen(),
-    SeedrScreen(),
+    AddTorrentScreen(),
     SettingsScreen(),
   ];
 
@@ -72,24 +68,14 @@ class _MainShellState extends ConsumerState<MainShell> {
         ),
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(CupertinoIcons.search),
-            activeIcon: Icon(CupertinoIcons.search),
-            label: 'Search',
-          ),
-          BottomNavigationBarItem(
             icon: Icon(CupertinoIcons.arrow_down_circle),
             activeIcon: Icon(CupertinoIcons.arrow_down_circle_fill),
             label: 'Downloads',
           ),
           BottomNavigationBarItem(
-            icon: Icon(CupertinoIcons.clock),
-            activeIcon: Icon(CupertinoIcons.clock_fill),
-            label: 'History',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(CupertinoIcons.cloud),
-            activeIcon: Icon(CupertinoIcons.cloud_fill),
-            label: 'Seedr',
+            icon: Icon(CupertinoIcons.plus_circle),
+            activeIcon: Icon(CupertinoIcons.plus_circle_fill),
+            label: 'Add Torrent',
           ),
           BottomNavigationBarItem(
             icon: Icon(CupertinoIcons.settings),

@@ -1,12 +1,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/glass_card.dart';
 import '../../../models/torrent.dart';
 import '../../../providers/downloads/download_providers.dart';
-import 'add_download_sheet.dart';
 
 class DownloadsScreen extends ConsumerStatefulWidget {
   const DownloadsScreen({super.key});
@@ -16,20 +14,7 @@ class DownloadsScreen extends ConsumerStatefulWidget {
 }
 
 class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
-  bool _selectionMode = false;
-  final Set<String> _selectedTasks = {};
   String _activeFilter = 'all';
-  String _searchQuery = '';
-  bool _showSearch = false;
-  final _searchController = TextEditingController();
-  String _sortBy = 'date';
-  bool _sortAsc = false;
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,27 +22,13 @@ class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
     final tasks = ref.watch(downloadTasksProvider);
     final stats = ref.watch(downloadStatsProvider);
 
-    final filteredTasks = _filterAndSortTasks(tasks);
+    final filteredTasks = _filterTasks(tasks);
 
     return CupertinoPageScaffold(
       navigationBar: CupertinoNavigationBar(
-        middle: _showSearch
-            ? CupertinoTextField(
-                controller: _searchController,
-                placeholder: 'Search downloads...',
-                placeholderStyle: TextStyle(color: isDark ? TorrentFlowTheme.darkTextSecondary : TorrentFlowTheme.lightTextSecondary),
-                style: TextStyle(color: isDark ? TorrentFlowTheme.darkText : TorrentFlowTheme.lightText),
-                autofocus: true,
-                onChanged: (v) => setState(() => _searchQuery = v.toLowerCase()),
-                decoration: BoxDecoration(
-                  color: isDark ? TorrentFlowTheme.darkSurface2 : TorrentFlowTheme.lightSurface2,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              )
-            : Text('Downloads', style: TorrentFlowTheme.headline.copyWith(
-                color: isDark ? TorrentFlowTheme.darkText : TorrentFlowTheme.lightText,
-              )),
+        middle: Text('Downloads', style: TorrentFlowTheme.headline.copyWith(
+          color: isDark ? TorrentFlowTheme.darkText : TorrentFlowTheme.lightText,
+        )),
         backgroundColor: isDark
             ? TorrentFlowTheme.darkSurface.withValues(alpha: 0.85)
             : TorrentFlowTheme.lightSurface.withValues(alpha: 0.85),
@@ -65,41 +36,22 @@ class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
           color: isDark ? TorrentFlowTheme.darkSeparator : TorrentFlowTheme.lightSeparator,
           width: 0.5,
         )),
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: () => setState(() => _showSearch = !_showSearch),
-          child: Icon(
-            _showSearch ? CupertinoIcons.xmark_circle : CupertinoIcons.search,
-            color: TorrentFlowTheme.accent,
-          ),
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CupertinoButton(
-              padding: EdgeInsets.zero,
-              onPressed: () => _showSortOptions(context),
-              child: Icon(CupertinoIcons.arrow_up_arrow_down, color: TorrentFlowTheme.accent),
-            ),
-            const SizedBox(width: 4),
-            CupertinoButton(
-              padding: EdgeInsets.zero,
-              onPressed: () => _showAddOptions(context),
-              child: Icon(CupertinoIcons.plus, color: TorrentFlowTheme.accent),
-            ),
-          ],
-        ),
+        trailing: filteredTasks.isNotEmpty
+            ? CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: () => _showSortOptions(),
+                child: const Icon(CupertinoIcons.arrow_up_arrow_down, size: 20),
+              )
+            : null,
       ),
       child: SafeArea(
         child: Column(
           children: [
-            _buildStatsBar(stats, isDark),
-            _buildFilterTabs(isDark),
-            if (_selectionMode) _buildSelectionBar(isDark),
+            _buildFilterBar(isDark, stats),
             Expanded(
               child: filteredTasks.isEmpty
                   ? _buildEmptyState(isDark)
-                  : _buildDownloadList(filteredTasks, isDark),
+                  : _buildTaskList(filteredTasks, isDark),
             ),
           ],
         ),
@@ -107,20 +59,127 @@ class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
     );
   }
 
-  void _showSortOptions(BuildContext context) {
-    final sorts = [
-      {'key': 'date', 'label': 'Date Added'},
-      {'key': 'name', 'label': 'Name'},
-      {'key': 'size', 'label': 'Size'},
-      {'key': 'progress', 'label': 'Progress'},
-      {'key': 'speed', 'label': 'Speed'},
-    ];
+  Widget _buildFilterBar(bool isDark, DownloadStats stats) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: TorrentFlowTheme.standardPadding, vertical: 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _buildFilterChip(label: 'All (${stats.total})', filter: 'all', isDark: isDark),
+            const SizedBox(width: 6),
+            _buildFilterChip(label: 'Active (${stats.active})', filter: 'active', isDark: isDark),
+            const SizedBox(width: 6),
+            _buildFilterChip(label: 'Completed (${stats.completed})', filter: 'completed', isDark: isDark),
+            const SizedBox(width: 6),
+            _buildFilterChip(label: 'Paused (${stats.paused})', filter: 'paused', isDark: isDark),
+            const SizedBox(width: 6),
+            _buildFilterChip(label: 'Errors (${stats.error})', filter: 'error', isDark: isDark),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterChip({required String label, required String filter, required bool isDark}) {
+    final isSelected = _activeFilter == filter;
+    return GestureDetector(
+      onTap: () => setState(() => _activeFilter = filter),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? TorrentFlowTheme.accent.withValues(alpha: 0.15)
+              : (isDark ? TorrentFlowTheme.darkSurface3 : TorrentFlowTheme.lightSurface2),
+          borderRadius: BorderRadius.circular(8),
+          border: isSelected
+              ? Border.all(color: TorrentFlowTheme.accent.withValues(alpha: 0.5))
+              : null,
+        ),
+        child: Text(label, style: TextStyle(
+          fontSize: 13,
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+          color: isSelected ? TorrentFlowTheme.accent : TorrentFlowTheme.darkTextSecondary,
+        )),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(bool isDark) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(CupertinoIcons.arrow_down_circle, size: 56,
+            color: isDark ? TorrentFlowTheme.darkTextSecondary : TorrentFlowTheme.lightTextSecondary),
+          const SizedBox(height: 16),
+          Text('No downloads yet', style: TorrentFlowTheme.body.copyWith(
+            color: isDark ? TorrentFlowTheme.darkTextSecondary : TorrentFlowTheme.lightTextSecondary,
+          )),
+          const SizedBox(height: 8),
+          Text('Add a magnet link or torrent file to start',
+            style: TorrentFlowTheme.footnote.copyWith(
+              color: isDark ? TorrentFlowTheme.darkTextSecondary : TorrentFlowTheme.lightTextSecondary,
+            )),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTaskList(List<DownloadTask> tasks, bool isDark) {
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(horizontal: TorrentFlowTheme.standardPadding, vertical: 4),
+      itemCount: tasks.length,
+      separatorBuilder: (_, __) => const SizedBox(height: TorrentFlowTheme.spacing),
+      itemBuilder: (context, index) => _TorrentTaskCard(
+        task: tasks[index],
+        isDark: isDark,
+        onTap: () => _showTaskDetails(tasks[index]),
+        onPause: () => ref.read(downloadTasksProvider.notifier).pauseTask(tasks[index].id),
+        onResume: () => ref.read(downloadTasksProvider.notifier).resumeTask(tasks[index].id),
+        onDelete: () => _confirmDelete(tasks[index]),
+      ),
+    );
+  }
+
+  void _showTaskDetails(DownloadTask task) {
+    HapticFeedback.mediumImpact();
+    showCupertinoModalPopup(
+      context: context,
+      builder: (context) => _TorrentDetailSheet(task: task),
+    );
+  }
+
+  void _confirmDelete(DownloadTask task) {
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Remove Download'),
+        content: Text('Remove "${task.title}" from the list?'),
+        actions: [
+          CupertinoButton(
+            child: const Text('Cancel'),
+            onPressed: () => Navigator.of(ctx).pop(),
+          ),
+          CupertinoButton(
+            child: const Text('Remove', style: TextStyle(color: CupertinoColors.systemRed)),
+            onPressed: () {
+              ref.read(downloadTasksProvider.notifier).removeTask(task.id);
+              Navigator.of(ctx).pop();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSortOptions() {
     showCupertinoModalPopup(
       context: context,
       builder: (ctx) => Container(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).padding.bottom + 8),
         decoration: BoxDecoration(
-          color: CupertinoTheme.brightnessOf(context) == Brightness.dark
+          color: CupertinoTheme.brightnessOf(ctx) == Brightness.dark
               ? TorrentFlowTheme.darkSurface : TorrentFlowTheme.lightSurface,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
@@ -136,489 +195,88 @@ class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(TorrentFlowTheme.standardPadding),
               child: Text('Sort By', style: TorrentFlowTheme.title3),
             ),
-            ...sorts.map((s) => CupertinoButton(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              onPressed: () {
-                if (_sortBy == s['key']) {
-                  _sortAsc = !_sortAsc;
-                } else {
-                  _sortBy = s['key']!;
-                  _sortAsc = s['key'] == 'date' || s['key'] == 'progress';
-                }
-                setState(() {});
-                Navigator.of(ctx).pop();
-              },
-              child: Row(
-                children: [
-                  Expanded(child: Text(s['label']!, style: TorrentFlowTheme.body)),
-                  if (_sortBy == s['key'])
-                    Icon(
-                      _sortAsc ? CupertinoIcons.chevron_up : CupertinoIcons.chevron_down,
-                      color: TorrentFlowTheme.accent,
-                    ),
-                ],
-              ),
-            )),
+            _SortOption(label: 'Date Added', value: 'date'),
+            _SortOption(label: 'Name', value: 'name'),
+            _SortOption(label: 'Progress', value: 'progress'),
+            _SortOption(label: 'Size', value: 'size'),
+            const SizedBox(height: 16),
           ],
         ),
       ),
     );
-  }
-
-  List<DownloadTask> _filterAndSortTasks(List<DownloadTask> tasks) {
-    var result = _filterTasks(tasks);
-    if (_searchQuery.isNotEmpty) {
-      result = result.where((t) => t.title.toLowerCase().contains(_searchQuery)).toList();
-    }
-    result.sort((a, b) {
-      int cmp;
-      switch (_sortBy) {
-        case 'name':
-          cmp = a.title.compareTo(b.title);
-        case 'size':
-          cmp = a.totalSize.compareTo(b.totalSize);
-        case 'progress':
-          cmp = a.progress.compareTo(b.progress);
-        case 'speed':
-          cmp = a.downloadSpeed.compareTo(b.downloadSpeed);
-        default:
-          cmp = b.addedAt.compareTo(a.addedAt);
-      }
-      return _sortAsc ? cmp : -cmp;
-    });
-    return result;
-  }
-
-  Widget _buildStatsBar(DownloadStats stats, bool isDark) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _StatItem(label: 'Active', count: stats.active, color: TorrentFlowTheme.accent),
-          _StatItem(label: 'Paused', count: stats.paused, color: TorrentFlowTheme.paused),
-          GestureDetector(
-            onTap: stats.completed > 0 ? () => _confirmClearCompleted(context) : null,
-            child: _StatItem(label: 'Complete', count: stats.completed, color: TorrentFlowTheme.success),
-          ),
-          _StatItem(label: 'Errors', count: stats.error, color: TorrentFlowTheme.error),
-        ],
-      ),
-    );
-  }
-
-  void _confirmClearCompleted(BuildContext context) {
-    showCupertinoDialog(
-      context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('Clear Completed'),
-        content: const Text('Remove all completed downloads from the list? Files remain on disk.'),
-        actions: [
-          CupertinoButton(child: const Text('Cancel'), onPressed: () => Navigator.of(ctx).pop()),
-          CupertinoButton(
-            child: Text('Clear', style: TextStyle(color: TorrentFlowTheme.error)),
-            onPressed: () {
-              ref.read(downloadTasksProvider.notifier).removeCompleted();
-              Navigator.of(ctx).pop();
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFilterTabs(bool isDark) {
-    final filters = ['all', 'active', 'paused', 'completed'];
-    final labels = ['All', 'Active', 'Paused', 'Done'];
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: Row(
-        children: List.generate(filters.length, (i) {
-          final isActive = _activeFilter == filters[i];
-          return Expanded(
-            child: CupertinoButton(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              onPressed: () => setState(() => _activeFilter = filters[i]),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: isActive ? TorrentFlowTheme.accent : CupertinoColors.transparent,
-                      width: 2,
-                    ),
-                  ),
-                ),
-                child: Text(labels[i], style: TorrentFlowTheme.footnote.copyWith(
-                  color: isActive ? TorrentFlowTheme.accent : TorrentFlowTheme.darkTextSecondary,
-                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-                )),
-              ),
-            ),
-          );
-        }),
-      ),
-    );
-  }
-
-  Widget _buildSelectionBar(bool isDark) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: TorrentFlowTheme.accent.withValues(alpha: 0.1),
-      child: Row(
-        children: [
-          Text('${_selectedTasks.length} selected', style: TorrentFlowTheme.footnote.copyWith(
-            color: TorrentFlowTheme.accent,
-          )),
-          const Spacer(),
-          CupertinoButton(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            onPressed: _selectedTasks.isEmpty ? null : () => _batchPause(),
-            child: const Text('Pause', style: TextStyle(fontSize: 13)),
-          ),
-          CupertinoButton(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            onPressed: _selectedTasks.isEmpty ? null : () => _batchResume(),
-            child: const Text('Resume', style: TextStyle(fontSize: 13)),
-          ),
-          CupertinoButton(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            onPressed: () => _batchRemove(),
-            child: Text('Delete', style: TextStyle(fontSize: 13, color: TorrentFlowTheme.error)),
-          ),
-          CupertinoButton(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            onPressed: () => setState(() {
-              _selectionMode = false;
-              _selectedTasks.clear();
-            }),
-            child: const Text('Done', style: TextStyle(fontSize: 13)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _batchPause() {
-    final notifier = ref.read(downloadTasksProvider.notifier);
-    for (final id in _selectedTasks) {
-      notifier.pauseTask(id);
-    }
-    _selectedTasks.clear();
-  }
-
-  void _batchResume() {
-    final notifier = ref.read(downloadTasksProvider.notifier);
-    for (final id in _selectedTasks) {
-      notifier.resumeTask(id);
-    }
-    _selectedTasks.clear();
-  }
-
-  void _batchRemove() {
-    final notifier = ref.read(downloadTasksProvider.notifier);
-    for (final id in _selectedTasks) {
-      notifier.removeTask(id);
-    }
-    _selectedTasks.clear();
   }
 
   List<DownloadTask> _filterTasks(List<DownloadTask> tasks) {
+    var result = tasks;
     switch (_activeFilter) {
       case 'active':
-        return tasks.where((t) => t.status == DownloadStatus.downloading || t.status == DownloadStatus.queued).toList();
-      case 'paused':
-        return tasks.where((t) => t.status == DownloadStatus.paused || t.status == DownloadStatus.stopped).toList();
+        result = result.where((t) => t.status == DownloadStatus.downloading || t.status == DownloadStatus.queued).toList();
+        break;
       case 'completed':
-        return tasks.where((t) => t.status == DownloadStatus.completed).toList();
-      default:
-        return tasks;
+        result = result.where((t) => t.status == DownloadStatus.completed).toList();
+        break;
+      case 'paused':
+        result = result.where((t) => t.status == DownloadStatus.paused || t.status == DownloadStatus.stopped).toList();
+        break;
+      case 'error':
+        result = result.where((t) => t.status == DownloadStatus.error).toList();
+        break;
     }
-  }
-
-  Widget _buildEmptyState(bool isDark) {
-    final messages = {
-      'all': 'No downloads yet',
-      'active': 'No active downloads',
-      'paused': 'No paused downloads',
-      'completed': 'No completed downloads',
-    };
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(CupertinoIcons.arrow_down_circle, size: 48,
-            color: isDark ? TorrentFlowTheme.darkTextSecondary : TorrentFlowTheme.lightTextSecondary),
-          const SizedBox(height: 12),
-          Text(messages[_activeFilter]!, style: TorrentFlowTheme.body.copyWith(
-            color: isDark ? TorrentFlowTheme.darkTextSecondary : TorrentFlowTheme.lightTextSecondary,
-          )),
-          const SizedBox(height: 8),
-          CupertinoButton(
-            onPressed: () => _showAddOptions(context),
-            child: const Text('Add your first download'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDownloadList(List<DownloadTask> tasks, bool isDark) {
-    return ListView.separated(
-      padding: const EdgeInsets.all(TorrentFlowTheme.standardPadding),
-      itemCount: tasks.length,
-      separatorBuilder: (context, index) => const SizedBox(height: TorrentFlowTheme.spacing),
-      itemBuilder: (context, index) {
-        final task = tasks[index];
-        final isSelected = _selectedTasks.contains(task.id);
-        return _DownloadCard(
-          task: task,
-          isDark: isDark,
-          selectionMode: _selectionMode,
-          isSelected: isSelected,
-          onTap: () {
-            if (_selectionMode) {
-              setState(() {
-                if (isSelected) {
-                  _selectedTasks.remove(task.id);
-                } else {
-                  _selectedTasks.add(task.id);
-                }
-              });
-            } else {
-              _showTaskOptions(task, isDark);
-            }
-          },
-          onLongPress: () {
-            HapticFeedback.mediumImpact();
-            setState(() {
-              _selectionMode = true;
-              _selectedTasks.add(task.id);
-            });
-          },
-          onPause: () => ref.read(downloadTasksProvider.notifier).pauseTask(task.id),
-          onResume: () => ref.read(downloadTasksProvider.notifier).resumeTask(task.id),
-          onRemove: () => ref.read(downloadTasksProvider.notifier).removeTask(task.id),
-        );
-      },
-    );
-  }
-
-  void _showTaskOptions(DownloadTask task, bool isDark) {
-    showCupertinoModalPopup(
-      context: context,
-      builder: (ctx) => Container(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).padding.bottom + TorrentFlowTheme.standardPadding,
-        ),
-        decoration: BoxDecoration(
-          color: isDark ? TorrentFlowTheme.darkSurface : TorrentFlowTheme.lightSurface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Center(
-              child: Container(
-                margin: const EdgeInsets.symmetric(vertical: 8),
-                width: 36, height: 4,
-                decoration: BoxDecoration(
-                  color: TorrentFlowTheme.darkTextSecondary,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(TorrentFlowTheme.standardPadding),
-              child: Text(task.title, style: TorrentFlowTheme.title3, maxLines: 2, overflow: TextOverflow.ellipsis),
-            ),
-            if (task.status == DownloadStatus.downloading || task.status == DownloadStatus.queued)
-              _MenuButton(icon: CupertinoIcons.pause, label: 'Pause', onTap: () { ref.read(downloadTasksProvider.notifier).pauseTask(task.id); Navigator.of(ctx).pop(); }),
-            if (task.status == DownloadStatus.paused)
-              _MenuButton(icon: CupertinoIcons.play, label: 'Resume', onTap: () { ref.read(downloadTasksProvider.notifier).resumeTask(task.id); Navigator.of(ctx).pop(); }),
-            if (task.status == DownloadStatus.error)
-              _MenuButton(icon: CupertinoIcons.refresh, label: 'Retry', onTap: () { ref.read(downloadTasksProvider.notifier).retryTask(task.id); Navigator.of(ctx).pop(); }),
-            _MenuButton(icon: CupertinoIcons.trash, label: 'Remove', isDestructive: true, onTap: () { ref.read(downloadTasksProvider.notifier).removeTask(task.id); Navigator.of(ctx).pop(); }),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showAddOptions(BuildContext context) {
-    final ctx = context;
-    showCupertinoModalPopup(
-      context: ctx,
-      builder: (popupContext) => Container(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(popupContext).padding.bottom + TorrentFlowTheme.standardPadding,
-        ),
-        decoration: BoxDecoration(
-          color: CupertinoTheme.brightnessOf(popupContext) == Brightness.dark
-              ? TorrentFlowTheme.darkSurface
-              : TorrentFlowTheme.lightSurface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Center(
-              child: Container(
-                margin: const EdgeInsets.symmetric(vertical: 8),
-                width: 36, height: 4,
-                decoration: BoxDecoration(
-                  color: TorrentFlowTheme.darkTextSecondary,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(TorrentFlowTheme.standardPadding),
-              child: Text('Add Download', style: TorrentFlowTheme.title3),
-            ),
-            _MenuButton(icon: CupertinoIcons.link, label: 'Paste Magnet Link', onTap: () { Navigator.of(popupContext).pop(); _showMagnetInput(ctx); }),
-            _MenuButton(icon: CupertinoIcons.doc, label: 'Import .torrent File', onTap: () { Navigator.of(popupContext).pop(); _importTorrentFile(ctx); }),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showMagnetInput(BuildContext context) {
-    final controller = TextEditingController();
-    showCupertinoDialog(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: const Text('Add Magnet Link'),
-        content: CupertinoTextField(
-          controller: controller,
-          placeholder: 'magnet:?xt=urn:btih:...',
-          autofocus: true,
-        ),
-        actions: [
-          CupertinoButton(
-            child: const Text('Cancel'),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          CupertinoButton(
-            child: const Text('Add'),
-            onPressed: () {
-              if (controller.text.isNotEmpty) {
-                Navigator.of(context).pop();
-                showCupertinoModalPopup(
-                  context: context,
-                  builder: (context) => AddDownloadSheet(magnetUri: controller.text),
-                );
-              }
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _importTorrentFile(BuildContext context) {
-    // File picker integration
-    showCupertinoDialog(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: const Text('Import .torrent'),
-        content: const Text('Select a .torrent file from your device.'),
-        actions: [
-          CupertinoButton(
-            child: const Text('Cancel'),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          CupertinoButton(
-            child: const Text('Browse'),
-            onPressed: () {
-              Navigator.of(context).pop();
-              // TODO: Integrate file_picker
-            },
-          ),
-        ],
-      ),
-    );
+    return result;
   }
 }
 
-class _MenuButton extends StatelessWidget {
-  final IconData icon;
+class _SortOption extends StatelessWidget {
   final String label;
-  final bool isDestructive;
-  final VoidCallback onTap;
-
-  const _MenuButton({required this.icon, required this.label, this.isDestructive = false, required this.onTap});
+  final String value;
+  const _SortOption({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
     return CupertinoButton(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      onPressed: onTap,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          Icon(icon, color: isDestructive ? TorrentFlowTheme.error : TorrentFlowTheme.accent),
-          const SizedBox(width: 12),
-          Text(label, style: TextStyle(color: isDestructive ? TorrentFlowTheme.error : null)),
+          const SizedBox(width: 16),
+          Text(label, style: TorrentFlowTheme.body),
+          const Spacer(),
+          Icon(CupertinoIcons.chevron_forward, size: 14, color: TorrentFlowTheme.darkTextSecondary),
         ],
       ),
+      onPressed: () => Navigator.of(context).pop(),
     );
   }
 }
 
-class _StatItem extends StatelessWidget {
-  final String label;
-  final int count;
-  final Color color;
-
-  const _StatItem({required this.label, required this.count, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text('$count', style: TextStyle(
-          fontSize: 20,
-          fontWeight: FontWeight.w700,
-          color: color,
-        )),
-        Text(label, style: TorrentFlowTheme.caption1.copyWith(
-          color: TorrentFlowTheme.darkTextSecondary,
-        )),
-      ],
-    );
-  }
-}
-
-class _DownloadCard extends StatelessWidget {
+class _TorrentTaskCard extends StatelessWidget {
   final DownloadTask task;
   final bool isDark;
-  final bool selectionMode;
-  final bool isSelected;
   final VoidCallback onTap;
-  final VoidCallback? onLongPress;
-  final VoidCallback? onPause;
-  final VoidCallback? onResume;
-  final VoidCallback? onRemove;
+  final VoidCallback onPause;
+  final VoidCallback onResume;
+  final VoidCallback onDelete;
 
-  const _DownloadCard({
+  const _TorrentTaskCard({
     required this.task,
     required this.isDark,
-    this.selectionMode = false,
-    this.isSelected = false,
     required this.onTap,
-    this.onLongPress,
-    this.onPause,
-    this.onResume,
-    this.onRemove,
+    required this.onPause,
+    required this.onResume,
+    required this.onDelete,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isActive = task.status == DownloadStatus.downloading;
+    final progressColor = task.status == DownloadStatus.error
+        ? TorrentFlowTheme.error
+        : task.status == DownloadStatus.paused
+            ? TorrentFlowTheme.warning
+            : TorrentFlowTheme.accent;
+
     return GlassCard(
       onTap: onTap,
       child: Column(
@@ -626,181 +284,264 @@ class _DownloadCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              if (selectionMode)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: Icon(
-                    isSelected ? CupertinoIcons.checkmark_circle_fill : CupertinoIcons.circle,
-                    color: isSelected ? TorrentFlowTheme.accent : TorrentFlowTheme.darkTextSecondary,
-                    size: 22,
+              Expanded(
+                child: Text(task.title, style: TorrentFlowTheme.callout.copyWith(
+                  color: isDark ? TorrentFlowTheme.darkText : TorrentFlowTheme.lightText,
+                  fontWeight: FontWeight.w500,
+                ), maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
+              _StatusBadge(status: task.status, isDark: isDark),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: Container(
+              height: 4,
+              decoration: BoxDecoration(
+                color: isDark ? TorrentFlowTheme.darkSurface3 : TorrentFlowTheme.lightSurface2,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: FractionallySizedBox(
+                alignment: Alignment.centerLeft,
+                widthFactor: task.progress > 0 ? task.progress : 0,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: progressColor,
+                    borderRadius: BorderRadius.circular(4),
                   ),
                 ),
-              ProgressRing(progress: task.progress),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(task.title, style: TorrentFlowTheme.callout.copyWith(
-                      color: isDark ? TorrentFlowTheme.darkText : TorrentFlowTheme.lightText,
-                      fontWeight: FontWeight.w500,
-                    ), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 4),
-                    Text(task.formattedProgress, style: TorrentFlowTheme.footnote.copyWith(
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Text(task.formattedProgress, style: TorrentFlowTheme.caption1.copyWith(
+                color: isDark ? TorrentFlowTheme.darkTextSecondary : TorrentFlowTheme.lightTextSecondary,
+                fontWeight: FontWeight.w600,
+              )),
+              const SizedBox(width: 8),
+              Text('${task.formattedDownloaded} / ${task.formattedTotal}', style: TorrentFlowTheme.caption1.copyWith(
+                color: isDark ? TorrentFlowTheme.darkTextSecondary : TorrentFlowTheme.lightTextSecondary,
+              )),
+              if (isActive && task.downloadSpeed > 0) ...[
+                const Spacer(),
+                Icon(CupertinoIcons.arrow_down_circle, size: 12,
+                  color: isDark ? TorrentFlowTheme.darkTextSecondary : TorrentFlowTheme.lightTextSecondary),
+                const SizedBox(width: 3),
+                Text(task.formattedSpeed, style: TorrentFlowTheme.caption1.copyWith(
+                  color: TorrentFlowTheme.success,
+                )),
+              ],
+            ],
+          ),
+          if (task.totalSize > 0) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                if (isActive && task.downloadSpeed > 0) ...[
+                  Icon(CupertinoIcons.antenna_radiowaves_left_right, size: 12,
+                    color: isDark ? TorrentFlowTheme.darkTextSecondary : TorrentFlowTheme.lightTextSecondary),
+                  const SizedBox(width: 3),
+                  Text('${task.peers} peers', style: TorrentFlowTheme.caption1.copyWith(
+                    color: isDark ? TorrentFlowTheme.darkTextSecondary : TorrentFlowTheme.lightTextSecondary,
+                  )),
+                  const SizedBox(width: 8),
+                  Text('${task.seeders} seeds', style: TorrentFlowTheme.caption1.copyWith(
+                    color: TorrentFlowTheme.success,
+                  )),
+                  if (task.eta != null) ...[
+                    const SizedBox(width: 8),
+                    Icon(CupertinoIcons.clock, size: 12,
+                      color: isDark ? TorrentFlowTheme.darkTextSecondary : TorrentFlowTheme.lightTextSecondary),
+                    const SizedBox(width: 3),
+                    Text(_formatEta(task.eta!), style: TorrentFlowTheme.caption1.copyWith(
                       color: isDark ? TorrentFlowTheme.darkTextSecondary : TorrentFlowTheme.lightTextSecondary,
                     )),
                   ],
-                ),
-              ),
-              _StatusBadge(status: task.status, isDark: isDark),
-              if (!selectionMode) ...[
-                if (task.status == DownloadStatus.downloading || task.status == DownloadStatus.queued)
+                ],
+                const Spacer(),
+                if (task.status == DownloadStatus.downloading)
                   CupertinoButton(
                     padding: const EdgeInsets.all(4),
                     onPressed: onPause,
                     child: Icon(CupertinoIcons.pause_circle, size: 22, color: TorrentFlowTheme.warning),
-                  ),
-                if (task.status == DownloadStatus.paused)
+                  )
+                else if (task.status == DownloadStatus.paused)
                   CupertinoButton(
                     padding: const EdgeInsets.all(4),
                     onPressed: onResume,
                     child: Icon(CupertinoIcons.play_circle, size: 22, color: TorrentFlowTheme.success),
                   ),
-                if (task.status == DownloadStatus.error)
-                  CupertinoButton(
-                    padding: const EdgeInsets.all(4),
-                    onPressed: onRemove,
-                    child: Icon(CupertinoIcons.xmark_circle, size: 22, color: TorrentFlowTheme.error),
-                  ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 12),
-          Container(
-            height: 3,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(2),
-              color: isDark ? TorrentFlowTheme.darkSurface3 : TorrentFlowTheme.lightSurface2,
-            ),
-            child: FractionallySizedBox(
-              alignment: Alignment.centerLeft,
-              widthFactor: task.progress.clamp(0.0, 1.0),
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(2),
-                  color: _statusColor(task.status),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              _TaskStat(icon: CupertinoIcons.arrow_down, value: task.formattedSpeed, isDark: isDark),
-              if (task.uploadSpeed > 0) ...[
-                const SizedBox(width: 12),
-                _TaskStat(icon: CupertinoIcons.arrow_up, value: task.formattedUploadSpeed, isDark: isDark),
-              ],
-              if (task.peers > 0) ...[
-                const SizedBox(width: 12),
-                _TaskStat(icon: CupertinoIcons.person_2, value: '${task.peers}', isDark: isDark),
-              ],
-              const Spacer(),
-              Text(task.remainingFormatted, style: TorrentFlowTheme.caption1.copyWith(
-                color: isDark ? TorrentFlowTheme.darkTextSecondary : TorrentFlowTheme.lightTextSecondary,
-              )),
-              if (task.priority != DownloadPriority.normal) ...[
-                const SizedBox(width: 8),
-                Icon(
-                  task.priority == DownloadPriority.high ? CupertinoIcons.exclamationmark_circle : CupertinoIcons.chevron_down_circle,
-                  size: 14,
-                  color: task.priority == DownloadPriority.high ? TorrentFlowTheme.warning : TorrentFlowTheme.darkTextSecondary,
+                CupertinoButton(
+                  padding: const EdgeInsets.all(4),
+                  onPressed: onDelete,
+                  child: Icon(CupertinoIcons.trash_circle, size: 22, color: TorrentFlowTheme.error),
                 ),
               ],
-            ],
-          ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Color _statusColor(DownloadStatus status) {
-    return switch (status) {
-      DownloadStatus.downloading => TorrentFlowTheme.accent,
-      DownloadStatus.seeding => TorrentFlowTheme.success,
-      DownloadStatus.paused => TorrentFlowTheme.paused,
-      DownloadStatus.stopped => TorrentFlowTheme.stopped,
-      DownloadStatus.completed => TorrentFlowTheme.success,
-      DownloadStatus.error => TorrentFlowTheme.error,
-      DownloadStatus.verifying => TorrentFlowTheme.warning,
-      DownloadStatus.queued => TorrentFlowTheme.darkTextSecondary,
-    };
+  String _formatEta(Duration eta) {
+    if (eta.inDays > 0) return '${eta.inDays}d ${eta.inHours % 24}h';
+    if (eta.inHours > 0) return '${eta.inHours}h ${eta.inMinutes % 60}m';
+    if (eta.inMinutes > 0) return '${eta.inMinutes}m ${eta.inSeconds % 60}s';
+    return '${eta.inSeconds}s';
   }
 }
 
 class _StatusBadge extends StatelessWidget {
   final DownloadStatus status;
   final bool isDark;
-
   const _StatusBadge({required this.status, required this.isDark});
 
   @override
   Widget build(BuildContext context) {
-    final label = switch (status) {
-      DownloadStatus.downloading => 'Downloading',
-      DownloadStatus.seeding => 'Seeding',
-      DownloadStatus.paused => 'Paused',
-      DownloadStatus.stopped => 'Stopped',
-      DownloadStatus.completed => 'Complete',
-      DownloadStatus.error => 'Error',
-      DownloadStatus.verifying => 'Verifying',
-      DownloadStatus.queued => 'Queued',
-    };
+    Color color;
+    String label;
+
+    switch (status) {
+      case DownloadStatus.downloading:
+        color = TorrentFlowTheme.accent;
+        label = 'Downloading';
+        break;
+      case DownloadStatus.completed:
+        color = TorrentFlowTheme.success;
+        label = 'Completed';
+        break;
+      case DownloadStatus.paused:
+        color = TorrentFlowTheme.warning;
+        label = 'Paused';
+        break;
+      case DownloadStatus.error:
+        color = TorrentFlowTheme.error;
+        label = 'Error';
+        break;
+      case DownloadStatus.queued:
+        color = TorrentFlowTheme.darkTextSecondary;
+        label = 'Queued';
+        break;
+      default:
+        color = TorrentFlowTheme.darkTextSecondary;
+        label = status.name;
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: _statusColor().withValues(alpha: 0.15),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Text(label, style: TorrentFlowTheme.caption2.copyWith(
-        color: _statusColor(),
-        fontWeight: FontWeight.w600,
-      )),
+      child: Text(label, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600)),
     );
-  }
-
-  Color _statusColor() {
-    return switch (status) {
-      DownloadStatus.downloading => TorrentFlowTheme.accent,
-      DownloadStatus.seeding => TorrentFlowTheme.success,
-      DownloadStatus.paused => TorrentFlowTheme.paused,
-      DownloadStatus.stopped => TorrentFlowTheme.stopped,
-      DownloadStatus.completed => TorrentFlowTheme.success,
-      DownloadStatus.error => TorrentFlowTheme.error,
-      DownloadStatus.verifying => TorrentFlowTheme.warning,
-      DownloadStatus.queued => TorrentFlowTheme.darkTextSecondary,
-    };
   }
 }
 
-class _TaskStat extends StatelessWidget {
-  final IconData icon;
-  final String value;
-  final bool isDark;
-
-  const _TaskStat({required this.icon, required this.value, required this.isDark});
+class _TorrentDetailSheet extends StatelessWidget {
+  final DownloadTask task;
+  const _TorrentDetailSheet({required this.task});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 12, color: TorrentFlowTheme.darkTextSecondary),
-        const SizedBox(width: 3),
-        Text(value, style: TorrentFlowTheme.caption1.copyWith(
-          color: isDark ? TorrentFlowTheme.darkTextSecondary : TorrentFlowTheme.lightTextSecondary,
-        )),
-      ],
+    final isDark = CupertinoTheme.brightnessOf(context) == Brightness.dark;
+    return Container(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + TorrentFlowTheme.standardPadding),
+      decoration: BoxDecoration(
+        color: isDark ? TorrentFlowTheme.darkSurface : TorrentFlowTheme.lightSurface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              width: 36, height: 4,
+              decoration: BoxDecoration(
+                color: TorrentFlowTheme.darkTextSecondary,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: TorrentFlowTheme.standardPadding),
+            child: Text(task.title, style: TorrentFlowTheme.title3.copyWith(
+              color: isDark ? TorrentFlowTheme.darkText : TorrentFlowTheme.lightText,
+            )),
+          ),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: TorrentFlowTheme.standardPadding),
+            child: _detailRow('Status', task.status.name, isDark),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: TorrentFlowTheme.standardPadding),
+            child: _detailRow('Progress', task.formattedProgress, isDark),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: TorrentFlowTheme.standardPadding),
+            child: _detailRow('Downloaded', task.formattedDownloaded, isDark),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: TorrentFlowTheme.standardPadding),
+            child: _detailRow('Total Size', task.formattedTotal, isDark),
+          ),
+          if (task.downloadSpeed > 0)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: TorrentFlowTheme.standardPadding),
+              child: _detailRow('Speed', task.formattedSpeed, isDark),
+            ),
+          if (task.peers > 0)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: TorrentFlowTheme.standardPadding),
+              child: _detailRow('Peers', '${task.peers}', isDark),
+            ),
+          if (task.seeders > 0)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: TorrentFlowTheme.standardPadding),
+              child: _detailRow('Seeds', '${task.seeders}', isDark),
+            ),
+          if (task.infoHash != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: TorrentFlowTheme.standardPadding),
+              child: _detailRow('Info Hash', task.infoHash!, isDark),
+            ),
+          const SizedBox(height: 16),
+          Center(
+            child: CupertinoButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(label, style: TorrentFlowTheme.footnote.copyWith(
+              color: isDark ? TorrentFlowTheme.darkTextSecondary : TorrentFlowTheme.lightTextSecondary,
+            )),
+          ),
+          Expanded(
+            child: Text(value, style: TorrentFlowTheme.body.copyWith(
+              color: isDark ? TorrentFlowTheme.darkText : TorrentFlowTheme.lightText,
+            )),
+          ),
+        ],
+      ),
     );
   }
 }

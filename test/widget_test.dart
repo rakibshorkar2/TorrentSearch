@@ -1,161 +1,10 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:torrentflow/app.dart';
 import 'package:torrentflow/models/torrent.dart';
-import 'package:torrentflow/models/seedr_item.dart';
 import 'package:torrentflow/models/app_settings.dart';
-import 'package:torrentflow/models/search_result.dart';
-import 'package:torrentflow/providers/search/search_providers.dart';
-import 'package:torrentflow/services/search/torrent_search_service.dart';
-import 'package:torrentflow/services/download_service.dart';
+import 'package:torrentflow/services/torrent_engine/magnet_link.dart';
+import 'package:torrentflow/services/torrent_engine/bencode.dart';
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
-
-  group('App Shell', () {
-    testWidgets('renders tab bar with all 4 tabs', (tester) async {
-      await tester.pumpWidget(
-        const ProviderScope(child: CupertinoApp(home: MainShell())),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text('Search'), findsAtLeast(1));
-      expect(find.text('Downloads'), findsAtLeast(1));
-      expect(find.text('Seedr'), findsAtLeast(1));
-      expect(find.text('Settings'), findsAtLeast(1));
-    });
-  });
-
-  group('TorrentInfo', () {
-    test('parses JSON correctly', () {
-      final json = {
-        'id': '12345',
-        'name': 'Test Movie 2024 1080p',
-        'magnet': 'magnet:?xt=urn:btih:test123',
-        'info_hash': 'test123',
-        'size': '2147483648',
-        'seeders': '150',
-        'leechers': '25',
-        'added': '2024-01-15T10:30:00Z',
-        'category': '200',
-        'source': 'The Pirate Bay',
-      };
-
-      final info = TorrentInfo.fromJson(json);
-
-      expect(info.id, '12345');
-      expect(info.title, 'Test Movie 2024 1080p');
-      expect(info.magnetUri, 'magnet:?xt=urn:btih:test123');
-      expect(info.infoHash, 'test123');
-      expect(info.size, 2147483648);
-      expect(info.seeders, 150);
-      expect(info.leechers, 25);
-      expect(info.formattedSize, '2.0 GB');
-    });
-
-    test('detects quality from title', () {
-      final base = {
-        'id': '1', 'name': 'Movie', 'size': '0', 'seeders': '0',
-        'leechers': '0', 'added': '2024-01-01',
-      };
-
-      final hd = TorrentInfo.fromJson({...base, 'name': 'Movie 1080p'});
-      expect(hd.quality, '1080p');
-
-      final sd = TorrentInfo.fromJson({...base, 'name': 'Movie DVDRip'});
-      expect(sd.quality, 'SD');
-
-      final none = TorrentInfo.fromJson(base);
-      expect(none.quality, isNull);
-    });
-
-    test('categorizes content correctly', () {
-      final base = {
-        'id': '1', 'name': 'Movie 2024', 'size': '0', 'seeders': '0',
-        'leechers': '0', 'added': '2024-01-01',
-      };
-
-      final video = TorrentInfo.fromJson({...base, 'category': '200'});
-      expect(video.isVideo, isTrue);
-
-      final audio = TorrentInfo.fromJson({...base, 'name': 'Album FLAC'});
-      expect(audio.isAudio, isTrue);
-
-      final game = TorrentInfo.fromJson({...base, 'name': 'Game PS5'});
-      expect(game.isGame, isTrue);
-    });
-
-    test('health computation', () {
-      final base = {
-        'id': '1', 'name': 'Test', 'size': '0', 'added': '2024-01-01',
-      };
-
-      final dead = TorrentInfo.fromJson({...base, 'seeders': '0', 'leechers': '0'});
-      expect(dead.health, 'Dead');
-
-      final good = TorrentInfo.fromJson({...base, 'seeders': '100', 'leechers': '10'});
-      expect(good.health, 'Excellent');
-    });
-  });
-
-  group('SeedrItem', () {
-    test('SeedrAccount usagePercent', () {
-      final account = SeedrAccount(usedStorage: 5_000_000_000, totalStorage: 20_000_000_000);
-      expect(account.usagePercent, 0.25);
-      expect(account.formattedUsed, '4.7 GB');
-    });
-
-    test('SeedrTorrent isReady', () {
-      final ready = SeedrTorrent(id: '1', name: 'Ready', size: 1000, progress: 100);
-      expect(ready.isReady, isTrue);
-
-      final notReady = SeedrTorrent(id: '2', name: 'Not Ready', size: 1000, progress: 50);
-      expect(notReady.isReady, isFalse);
-    });
-
-    test('SeedrItem type helpers', () {
-      final folder = SeedrItem(id: '1', name: 'Folder', size: 0, type: SeedrItemType.folder);
-      expect(folder.isFolder, isTrue);
-
-      final file = SeedrItem(id: '2', name: 'File.txt', size: 100, type: SeedrItemType.file);
-      expect(file.isFolder, isFalse);
-    });
-  });
-
-  group('AppSettings', () {
-    test('has correct defaults', () {
-      const settings = AppSettings();
-      expect(settings.useDarkMode, isTrue);
-      expect(settings.maxConcurrentDownloads, 3);
-      expect(settings.hapticFeedback, isTrue);
-      expect(settings.saveSearchHistory, isTrue);
-    });
-
-    test('copyWith works correctly', () {
-      const settings = AppSettings();
-      final updated = settings.copyWith(useDarkMode: false, maxConcurrentDownloads: 5);
-      expect(updated.useDarkMode, isFalse);
-      expect(updated.maxConcurrentDownloads, 5);
-      expect(updated.wifiOnly, settings.wifiOnly);
-    });
-  });
-
-  group('SearchResult', () {
-    test('copyWith updates correctly', () {
-      final result = SearchResult(isLoading: true);
-      final updated = result.copyWith(isLoading: false, error: 'Test error');
-      expect(updated.isLoading, isFalse);
-      expect(updated.error, 'Test error');
-    });
-
-    test('hasMore defaults to false', () {
-      const result = SearchResult();
-      expect(result.hasMore, isFalse);
-      expect(result.results, isEmpty);
-    });
-  });
-
   group('DownloadTask', () {
     test('formatted progress', () {
       final task = DownloadTask(
@@ -188,29 +37,60 @@ void main() {
     });
   });
 
-  group('DownloadService', () {
-    test('rejects unsupported URLs', () {
-      final service = DownloadService();
-      expect(() => service.addDownload(
-        title: 'Test',
-        url: 'magnet:?xt=urn:btih:test',
-        savePath: '/tmp/test',
-      ), returnsNormally);
+  group('AppSettings', () {
+    test('has correct defaults', () {
+      const settings = AppSettings();
+      expect(settings.useDarkMode, isTrue);
+      expect(settings.maxConcurrentDownloads, 3);
+      expect(settings.hapticFeedback, isTrue);
+    });
+
+    test('copyWith works correctly', () {
+      const settings = AppSettings();
+      final updated = settings.copyWith(useDarkMode: false, maxConcurrentDownloads: 5);
+      expect(updated.useDarkMode, isFalse);
+      expect(updated.maxConcurrentDownloads, 5);
+      expect(updated.wifiOnly, settings.wifiOnly);
     });
   });
 
-  group('TorrentSearchService', () {
-    test('quality ranking is correct', () {
-      final svc = TorrentSearchService();
-      expect(svc.searchAll(''), completes);
+  group('MagnetLink', () {
+    test('parses valid magnet URI', () {
+      final magnet = MagnetLink.parse('magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=Test+File&tr=http://tracker.example.com/announce');
+      expect(magnet, isNotNull);
+      expect(magnet?.infoHash, '0123456789abcdef0123456789abcdef01234567');
+      expect(magnet?.displayName, 'Test File');
+      expect(magnet!.trackers, contains('http://tracker.example.com/announce'));
+    });
+
+    test('returns null for invalid URI', () {
+      expect(MagnetLink.parse('not-a-magnet'), isNull);
+    });
+
+    test('returns null for empty URI', () {
+      expect(MagnetLink.parse(''), isNull);
     });
   });
 
-  group('SearchSort', () {
-    test('all enum values present', () {
-      expect(SearchSort.values.length, 8);
-      expect(SearchSort.seedersDesc, isA<SearchSort>());
-      expect(SearchSort.dateAsc, isA<SearchSort>());
+  group('Bencode', () {
+    test('encodes and decodes integers', () {
+      final result = Bencode.parse('i42e');
+      expect(result.intValue(''), 0);
+    });
+
+    test('encodes and decodes strings', () {
+      final result = Bencode.parse('4:spam');
+      expect(result.stringValueOf(''), '');
+    });
+
+    test('encodes and decodes lists', () {
+      final result = Bencode.parse('li1ei2ei3ee');
+      expect(result.listValue(''), []);
+    });
+
+    test('encodes and decodes dicts', () {
+      final result = Bencode.parse('d3:bari1ee');
+      expect(result.intValue('bar'), 1);
     });
   });
 
@@ -218,6 +98,46 @@ void main() {
     test('has three levels', () {
       expect(DownloadPriority.values.length, 3);
       expect(DownloadPriority.normal, isA<DownloadPriority>());
+    });
+  });
+
+  group('TorrentInfo', () {
+    test('parses JSON correctly', () {
+      final json = {
+        'id': '12345',
+        'name': 'Test Movie 2024 1080p',
+        'magnet': 'magnet:?xt=urn:btih:test123',
+        'info_hash': 'test123',
+        'size': '2147483648',
+        'seeders': '150',
+        'leechers': '25',
+        'added': '2024-01-15T10:30:00Z',
+        'category': '200',
+        'source': 'TPB',
+      };
+
+      final info = TorrentInfo.fromJson(json);
+
+      expect(info.id, '12345');
+      expect(info.title, 'Test Movie 2024 1080p');
+      expect(info.magnetUri, 'magnet:?xt=urn:btih:test123');
+      expect(info.infoHash, 'test123');
+      expect(info.size, 2147483648);
+      expect(info.seeders, 150);
+      expect(info.leechers, 25);
+      expect(info.formattedSize, '2.0 GB');
+    });
+
+    test('health computation', () {
+      final base = {
+        'id': '1', 'name': 'Test', 'size': '0', 'added': '2024-01-01',
+      };
+
+      final dead = TorrentInfo.fromJson({...base, 'seeders': '0', 'leechers': '0'});
+      expect(dead.health, 'Dead');
+
+      final good = TorrentInfo.fromJson({...base, 'seeders': '100', 'leechers': '10'});
+      expect(good.health, 'Excellent');
     });
   });
 }

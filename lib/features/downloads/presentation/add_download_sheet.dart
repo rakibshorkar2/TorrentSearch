@@ -6,8 +6,6 @@ import 'package:path_provider/path_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/torrent.dart';
 import '../../../providers/downloads/download_providers.dart';
-import '../../../providers/history/history_providers.dart';
-import '../../../providers/seedr/seedr_providers.dart';
 
 class AddDownloadSheet extends ConsumerStatefulWidget {
   final TorrentInfo? torrent;
@@ -28,13 +26,9 @@ class _AddDownloadSheetState extends ConsumerState<AddDownloadSheet> {
   String? _error;
   DownloadPriority _priority = DownloadPriority.normal;
 
-  @override
-  void dispose() {
-    super.dispose();
-  }
-
   bool get _hasDirectUrl => widget.torrent?.fileUrl != null && widget.torrent!.fileUrl!.isNotEmpty;
   bool get _hasMagnet => (widget.magnetUri?.isNotEmpty == true) || (widget.torrent?.magnetUri?.isNotEmpty == true);
+  bool get _magnetOnly => _hasMagnet && !_hasDirectUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -104,59 +98,37 @@ class _AddDownloadSheetState extends ConsumerState<AddDownloadSheet> {
                 )),
             ),
           ],
-          if (_magnetOnly) ...[
+          if (_hasDirectUrl) ...[
             const SizedBox(height: 12),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: TorrentFlowTheme.standardPadding),
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: TorrentFlowTheme.warning.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: TorrentFlowTheme.warning.withValues(alpha: 0.3)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(CupertinoIcons.info_circle, size: 16, color: TorrentFlowTheme.warning),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text('Downloading via magnet link. Peer-to-peer download will begin.',
-                        style: TorrentFlowTheme.footnote.copyWith(color: TorrentFlowTheme.warning)),
-                    ),
-                  ],
-                ),
+              child: Row(
+                children: [
+                  Text('Priority:', style: TorrentFlowTheme.footnote.copyWith(
+                    color: isDark ? TorrentFlowTheme.darkTextSecondary : TorrentFlowTheme.lightTextSecondary,
+                  )),
+                  const SizedBox(width: 12),
+                  _PriorityChip(
+                    label: 'Low',
+                    isSelected: _priority == DownloadPriority.low,
+                    onTap: () => setState(() => _priority = DownloadPriority.low),
+                  ),
+                  const SizedBox(width: 8),
+                  _PriorityChip(
+                    label: 'Normal',
+                    isSelected: _priority == DownloadPriority.normal,
+                    onTap: () => setState(() => _priority = DownloadPriority.normal),
+                  ),
+                  const SizedBox(width: 8),
+                  _PriorityChip(
+                    label: 'High',
+                    isSelected: _priority == DownloadPriority.high,
+                    onTap: () => setState(() => _priority = DownloadPriority.high),
+                  ),
+                ],
               ),
             ),
           ],
-          const SizedBox(height: 12),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: TorrentFlowTheme.standardPadding),
-            child: Row(
-              children: [
-                Text('Priority:', style: TorrentFlowTheme.footnote.copyWith(
-                  color: isDark ? TorrentFlowTheme.darkTextSecondary : TorrentFlowTheme.lightTextSecondary,
-                )),
-                const SizedBox(width: 12),
-                _PriorityChip(
-                  label: 'Low',
-                  isSelected: _priority == DownloadPriority.low,
-                  onTap: () => setState(() => _priority = DownloadPriority.low),
-                ),
-                const SizedBox(width: 8),
-                _PriorityChip(
-                  label: 'Normal',
-                  isSelected: _priority == DownloadPriority.normal,
-                  onTap: () => setState(() => _priority = DownloadPriority.normal),
-                ),
-                const SizedBox(width: 8),
-                _PriorityChip(
-                  label: 'High',
-                  isSelected: _priority == DownloadPriority.high,
-                  onTap: () => setState(() => _priority = DownloadPriority.high),
-                ),
-              ],
-            ),
-          ),
           if (_error != null) ...[
             const SizedBox(height: 8),
             Padding(
@@ -186,18 +158,6 @@ class _AddDownloadSheetState extends ConsumerState<AddDownloadSheet> {
               child: SizedBox(
                 width: double.infinity,
                 child: CupertinoButton(
-                  color: TorrentFlowTheme.accent.withValues(alpha: 0.15),
-                  onPressed: _isAdding ? null : _sendToSeedr,
-                  child: const Text('Send to Seedr Cloud'),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: TorrentFlowTheme.standardPadding),
-              child: SizedBox(
-                width: double.infinity,
-                child: CupertinoButton(
                   onPressed: _copyMagnet,
                   child: const Text('Copy Magnet Link'),
                 ),
@@ -220,37 +180,11 @@ class _AddDownloadSheetState extends ConsumerState<AddDownloadSheet> {
     );
   }
 
-  bool get _magnetOnly => _hasMagnet && !_hasDirectUrl;
-
   Future<void> _copyMagnet() async {
     final magnet = widget.magnetUri ?? widget.torrent?.magnetUri;
     if (magnet == null || magnet.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: magnet));
     if (mounted) Navigator.of(context).pop();
-  }
-
-  Future<void> _sendToSeedr() async {
-    setState(() {
-      _isAdding = true;
-      _error = null;
-    });
-    try {
-      final magnet = widget.magnetUri ?? widget.torrent?.magnetUri;
-      if (magnet == null || magnet.isEmpty) throw Exception('No magnet link available');
-      final seedrService = ref.read(seedrServiceProvider);
-      await seedrService.addMagnet(magnet);
-      ref.read(historyProvider.notifier).addMagnetLink(
-        title: widget.torrent?.title ?? 'Unknown',
-        magnetUri: magnet,
-        infoHash: widget.torrent?.infoHash,
-        totalSize: widget.torrent?.size,
-      );
-      if (mounted) Navigator.of(context).pop();
-    } catch (e) {
-      if (mounted) setState(() => _error = 'Seedr error: $e');
-    } finally {
-      if (mounted) setState(() => _isAdding = false);
-    }
   }
 
   Future<void> _addDownload() async {
@@ -292,13 +226,6 @@ class _AddDownloadSheetState extends ConsumerState<AddDownloadSheet> {
         uploadLimit: null,
       ).first;
 
-      ref.read(historyProvider.notifier).addDownload(
-        title: title,
-        magnetUri: downloadUrl,
-        infoHash: infoHash,
-        totalSize: widget.torrent?.size,
-      );
-
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
@@ -311,7 +238,6 @@ class _AddDownloadSheetState extends ConsumerState<AddDownloadSheet> {
 class _Badge extends StatelessWidget {
   final String label;
   final Color color;
-
   const _Badge({required this.label, required this.color});
 
   @override
@@ -331,7 +257,6 @@ class _PriorityChip extends StatelessWidget {
   final String label;
   final bool isSelected;
   final VoidCallback onTap;
-
   const _PriorityChip({required this.label, required this.isSelected, required this.onTap});
 
   @override

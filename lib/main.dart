@@ -7,7 +7,6 @@ import 'core/native/native_service.dart';
 import 'core/constants/app_constants.dart';
 import 'providers/downloads/download_providers.dart';
 import 'services/storage_service.dart';
-import 'services/history_service.dart';
 import 'logging/app_logger.dart';
 
 void main() async {
@@ -32,9 +31,7 @@ void main() async {
   };
 
   bool storageInitialized = false;
-  bool historyInitialized = false;
   String? storageError;
-  String? historyError;
 
   try {
     final storage = StorageService();
@@ -45,23 +42,12 @@ void main() async {
     appLogger.e('StorageService init failed or timed out', error: e, stackTrace: st);
   }
 
-  try {
-    final historyService = HistoryService();
-    await historyService.init().timeout(const Duration(seconds: 5));
-    historyInitialized = true;
-  } catch (e, st) {
-    historyError = e.toString();
-    appLogger.e('HistoryService init failed or timed out', error: e, stackTrace: st);
-  }
-
   runZonedGuarded(() {
     runApp(
       ProviderScope(
         child: TorrentFlowAppStartup(
           storageReady: storageInitialized,
-          historyReady: historyInitialized,
           storageError: storageError,
-          historyError: historyError,
         ),
       ),
     );
@@ -72,16 +58,12 @@ void main() async {
 
 class TorrentFlowAppStartup extends ConsumerStatefulWidget {
   final bool storageReady;
-  final bool historyReady;
   final String? storageError;
-  final String? historyError;
 
   const TorrentFlowAppStartup({
     super.key,
     required this.storageReady,
-    required this.historyReady,
     this.storageError,
-    this.historyError,
   });
 
   @override
@@ -90,9 +72,7 @@ class TorrentFlowAppStartup extends ConsumerStatefulWidget {
 
 class _TorrentFlowAppStartupState extends ConsumerState<TorrentFlowAppStartup> {
   late bool _storageReady;
-  late bool _historyReady;
   String? _storageError;
-  String? _historyError;
   bool _initializing = false;
   bool _showDetails = false;
 
@@ -100,11 +80,9 @@ class _TorrentFlowAppStartupState extends ConsumerState<TorrentFlowAppStartup> {
   void initState() {
     super.initState();
     _storageReady = widget.storageReady;
-    _historyReady = widget.historyReady;
     _storageError = widget.storageError;
-    _historyError = widget.historyError;
 
-    if (_storageReady && _historyReady) {
+    if (_storageReady) {
       _initServices();
     }
   }
@@ -125,9 +103,7 @@ class _TorrentFlowAppStartupState extends ConsumerState<TorrentFlowAppStartup> {
     });
 
     bool storageOk = false;
-    bool historyOk = false;
     String? storageErr;
-    String? historyErr;
 
     try {
       final storage = StorageService();
@@ -138,25 +114,14 @@ class _TorrentFlowAppStartupState extends ConsumerState<TorrentFlowAppStartup> {
       appLogger.e('Retry StorageService init failed', error: e, stackTrace: st);
     }
 
-    try {
-      final historyService = HistoryService();
-      await historyService.init().timeout(const Duration(seconds: 5));
-      historyOk = true;
-    } catch (e, st) {
-      historyErr = e.toString();
-      appLogger.e('Retry HistoryService init failed', error: e, stackTrace: st);
-    }
-
     if (mounted) {
       setState(() {
         _storageReady = storageOk;
-        _historyReady = historyOk;
         _storageError = storageErr;
-        _historyError = historyErr;
         _initializing = false;
       });
 
-      if (storageOk && historyOk) {
+      if (storageOk) {
         _initServices();
       }
     }
@@ -170,9 +135,6 @@ class _TorrentFlowAppStartupState extends ConsumerState<TorrentFlowAppStartup> {
     try {
       await Hive.deleteBoxFromDisk(AppConstants.hiveBoxSettings);
       await Hive.deleteBoxFromDisk(AppConstants.hiveBoxDownloads);
-      await Hive.deleteBoxFromDisk(AppConstants.hiveBoxSearchHistory);
-      await Hive.deleteBoxFromDisk(AppConstants.hiveBoxSeedrCache);
-      await Hive.deleteBoxFromDisk(AppConstants.hiveBoxHistory);
     } catch (e) {
       appLogger.e('Failed to delete boxes from disk', error: e);
     }
@@ -182,7 +144,7 @@ class _TorrentFlowAppStartupState extends ConsumerState<TorrentFlowAppStartup> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_storageReady || !_historyReady) {
+    if (!_storageReady) {
       return CupertinoApp(
         debugShowCheckedModeBanner: false,
         theme: const CupertinoThemeData(
@@ -216,13 +178,10 @@ class _TorrentFlowAppStartupState extends ConsumerState<TorrentFlowAppStartup> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Text(
-                      'TorrentFlow failed to load its local databases. This can happen if files are corrupted or locked.\n\nFailed components: ${[
-                        if (!_storageReady) 'Main Storage',
-                        if (!_historyReady) 'History Database'
-                      ].join(', ')}',
+                    const Text(
+                      'TorrentFlow failed to load its local database.',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         color: CupertinoColors.systemGrey,
                       ),
@@ -266,10 +225,7 @@ class _TorrentFlowAppStartupState extends ConsumerState<TorrentFlowAppStartup> {
                           child: Align(
                             alignment: Alignment.centerLeft,
                             child: Text(
-                              [
-                                if (_storageError != null) 'Storage: $_storageError',
-                                if (_historyError != null) 'History: $_historyError',
-                              ].join('\n\n'),
+                              _storageError != null ? 'Storage: $_storageError' : '',
                               style: const TextStyle(
                                 fontFamily: 'Courier',
                                 fontSize: 12,

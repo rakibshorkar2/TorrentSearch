@@ -10,7 +10,6 @@ class StorageService {
   static StorageService? _instance;
   late Box<String> _settingsBox;
   late Box<String> _downloadsBox;
-  late Box<String> _searchHistoryBox;
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
   StorageService._();
@@ -24,7 +23,6 @@ class StorageService {
     await Hive.initFlutter();
     _settingsBox = await _openSafeBox(AppConstants.hiveBoxSettings);
     _downloadsBox = await _openSafeBox(AppConstants.hiveBoxDownloads);
-    _searchHistoryBox = await _openSafeBox(AppConstants.hiveBoxSearchHistory);
   }
 
   Future<Box<String>> _openSafeBox(String boxName) async {
@@ -61,9 +59,6 @@ class StorageService {
         uploadSpeedLimit: map['uploadSpeedLimit'] as int? ?? 0,
         connectionTimeout: map['connectionTimeout'] as int? ?? 10,
         hapticFeedback: map['hapticFeedback'] as bool? ?? true,
-        confirmBeforeDownload: map['confirmBeforeDownload'] as bool? ?? true,
-        autoDownloadCompletedSeedr: map['autoDownloadCompletedSeedr'] as bool? ?? false,
-        saveSearchHistory: map['saveSearchHistory'] as bool? ?? true,
         screenAwakeMinutes: map['screenAwakeMinutes'] as int?,
       );
     } catch (e) {
@@ -86,9 +81,6 @@ class StorageService {
       'uploadSpeedLimit': settings.uploadSpeedLimit,
       'connectionTimeout': settings.connectionTimeout,
       'hapticFeedback': settings.hapticFeedback,
-      'confirmBeforeDownload': settings.confirmBeforeDownload,
-      'autoDownloadCompletedSeedr': settings.autoDownloadCompletedSeedr,
-      'saveSearchHistory': settings.saveSearchHistory,
       'screenAwakeMinutes': settings.screenAwakeMinutes,
     };
     await _settingsBox.put('settings', jsonEncode(map));
@@ -110,29 +102,6 @@ class StorageService {
   Future<void> saveDownloads(List<DownloadTask> tasks) async {
     final list = tasks.map((t) => _downloadToMap(t)).toList();
     await _downloadsBox.put('tasks', jsonEncode(list));
-  }
-
-  // Search History
-  Future<List<String>> loadSearchHistory() async {
-    final json = _searchHistoryBox.get('history');
-    if (json == null) return [];
-    try {
-      return (jsonDecode(json) as List).cast<String>();
-    } catch (_) {
-      return [];
-    }
-  }
-
-  Future<void> saveSearchHistory(List<String> history) async {
-    await _searchHistoryBox.put('history', jsonEncode(history));
-  }
-
-  Future<void> addSearchQuery(String query) async {
-    final history = await loadSearchHistory();
-    history.remove(query);
-    history.insert(0, query);
-    if (history.length > 20) history.removeLast();
-    await saveSearchHistory(history);
   }
 
   // Secure Storage

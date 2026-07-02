@@ -1,499 +1,658 @@
-# Master Prompt — Build a Premium iOS Flutter App
-
-## Project Name
-
-**TorrentFlow**
-
-*A premium iPhone download manager with native iOS aesthetics, direct BitTorrent support, cloud torrent integration, and an exceptional user experience.*
+# Master Prompt — Build a Native-Feeling iOS Torrent Downloader (Flutter)
 
 ---
 
-# Objective
+You are an expert Flutter, Dart, iOS and networking engineer.
 
-Create a **Flutter application exclusively for iOS** that feels indistinguishable from a professionally designed native iOS app.
+Your goal is to build a **production-quality Flutter application** that runs on **iPhone (iOS only)** and is intended for **personal sideloading**.
 
-Target device:
+The application is **NOT a torrent search engine** and **NOT a media piracy application**.
 
-* iPhone 15 Pro
-* Latest stable iOS SDK
-* Portrait orientation
-* Responsive for all iPhones
-* Optimized for OLED displays
-* 60/120Hz smooth animations
+Its only purpose is to download files from:
 
-This app is intended for **personal use**.
+* .torrent files
+* magnet links
 
----
+The user supplies the torrent.
 
-# Primary Goals
+No indexing websites.
+No scraping.
+No search feature.
 
-The app should combine:
-
-* Direct BitTorrent downloading
-* Magnet link support
-* .torrent file support
-* Torrent searching using user-configured or freely available sources
-* Seedr cloud integration
-* Modern download manager
-* Beautiful iOS UI
-* Native-feeling animations
-* Excellent performance
-* Low memory usage
-* Stable networking
+The finished project must compile into an **unsigned IPA** through **GitHub Actions** on macOS for later sideloading.
 
 ---
 
-# Design Philosophy
+# Project Name
 
-The UI must feel like it was designed by Apple's Human Interface team.
+TorrentFlow
 
-Avoid Material Design.
+Alternative names:
 
-Follow Apple's Human Interface Guidelines.
-
-The experience should resemble Apple's first-party apps.
-
-The interface should feel:
-
-* elegant
-* lightweight
-* premium
-* fluid
-* responsive
-* uncluttered
+* TorrentDrop
+* MagnetFlow
+* TorrentDock
+* TorrentBox
 
 ---
 
-# Visual Style
+# Tech Stack
 
-Create a modern Liquid Glass aesthetic inspired by recent iOS design trends.
+Latest stable Flutter
 
-Use:
+Latest Dart
 
-* translucent glass surfaces
-* soft blur
-* layered depth
-* smooth shadows
-* subtle gradients
-* rounded corners
-* vibrant highlights
-* animated lighting
-* premium spacing
-* beautiful typography
+Riverpod
 
-No heavy borders.
+Go Router
 
-No cheap gradients.
+Flutter Hooks (optional)
 
-No clutter.
+Hive or Isar
 
-Everything should breathe.
+Freezed
+
+json_serializable
+
+path_provider
+
+file_picker
+
+url_launcher
+
+share_plus
+
+receive_sharing_intent
+
+uni_links
+
+permission_handler
+
+device_info_plus
+
+package_info_plus
+
+connectivity_plus
+
+---
+
+# Torrent Engine
+
+The app MUST use a real BitTorrent engine.
+
+Preferred order:
+
+libtorrent via FFI
+
+or
+
+a mature Dart torrent implementation
+
+or
+
+a lightweight native Swift wrapper around libtorrent.
+
+The engine must support
+
+* BitTorrent v1
+* Magnet links
+* DHT
+* PEX
+* Trackers
+* Resume downloading
+* Fast resume data
+* Sequential download option
+* Piece verification
+
+---
+
+# UI
+
+Must feel like a native iOS application.
+
+Requirements
+
+Liquid Glass inspired design
+
+Large navigation titles
+
+Blur backgrounds
+
+Rounded cards
+
+Smooth animations
+
+60 FPS
+
+Haptic feedback
+
+Native Cupertino widgets wherever appropriate.
+
+Dark mode
+
+Light mode
+
+Automatic theme
+
+SF Symbols icons
+
+No Material Design appearance.
 
 ---
 
 # Navigation
 
-Use a native iOS bottom tab bar.
+Bottom Navigation
 
-Tabs:
+Downloads
 
-1. Search
-2. Downloads
-3. Seedr
-4. Settings
+Add Torrent
 
-Use SF Symbols where appropriate.
-
-Navigation transitions should match native iOS.
+Settings
 
 ---
 
-# Search Tab
+# Downloads Page
 
-Purpose:
+Shows all torrents.
 
-Find torrents from user-configured or freely available sources.
+Each card displays
 
-Features:
+Torrent name
 
-* beautiful search page
-* large search field
-* recent searches
-* trending section (optional)
-* categories
-* filters
-* sorting
+Progress bar
 
-Filters:
+Downloaded
 
-* size
-* seeders
-* upload date
-* category
+Remaining
 
-Result cards should display:
+Download speed
 
-* title
-* size
-* seeders
-* leechers
-* health indicator
-* upload date
+Upload speed
 
-Actions:
+Peers
 
-* Open details
-* Add via magnet link
-* Import .torrent file
+Seeds
 
-Support deep linking so the app can open `magnet:` links from Safari or other apps.
+ETA
+
+Status
+
+Current file
+
+Pause button
+
+Resume button
+
+Delete button
+
+Swipe actions
+
+Tap opens details.
 
 ---
 
 # Torrent Details
 
-Display:
+Displays
 
-* title
-* size
-* files
-* trackers
-* comments (if available)
-* peers
-* health
-* piece information
+Torrent information
 
-Allow:
+Tracker list
 
-* select files
-* rename download
-* choose destination
-* start download
+Connected peers
 
----
+Files
 
-# Downloads Tab
+Piece progress
 
-Modern download manager.
+Hash
 
-Each download card includes:
+Creation date
 
-* thumbnail (if available)
-* title
-* progress ring
-* progress bar
-* percentage
-* download speed
-* upload speed
-* ETA
-* peers
-* seeders
-* remaining size
+Comment
 
-Actions:
+Size
 
-* pause
-* resume
-* stop
-* delete
-* share
-* reveal files
+Downloaded
 
-Support:
+Uploaded
 
-* multiple simultaneous downloads
-* queue
-* priorities
-* sequential download
-* bandwidth limits
-* retry logic
-* resume after restart
-* integrity verification
+Ratio
 
-The user will generally keep the app open while downloading.
+Availability
+
+Logs
 
 ---
 
-# Seedr Tab
+# Add Torrent Page
 
-Integrate with the user's Seedr account if supported by the service's API.
+Two large buttons.
 
-Features:
+## Magnet Link
 
-* login/logout
-* cloud storage usage
-* browse folders
-* add magnet links
-* upload .torrent files
-* monitor cloud download progress
-* stream supported media (if available)
-* download completed files to device
-* delete
-* rename
-* organize files
+Paste magnet
 
-The UI should match the rest of the application.
+Paste from clipboard
+
+Open from Share Sheet
+
+Validate link
+
+Start download
 
 ---
 
-# Settings
+## Torrent File
 
-Include:
+Import using Files app
 
-General
+Drag and Drop support
 
-Downloads
+Recent files
 
-Network
+Validate torrent metadata
 
-Appearance
+---
 
-About
+# Magnet Handling
 
-Options:
+Support
 
-SOCKS5 proxy
+magnet:?xt=
 
-Connection timeout
+Automatically parse
 
-Maximum peers
+Display
 
-Maximum connections
+Name
 
-Download speed limit
+Trackers
 
-Upload speed limit
+Hash
 
-Wi-Fi only option
+Metadata progress
 
-Auto import magnet links
+Before download.
 
-Notifications
+---
 
-Theme (System/Light/Dark)
+# Open Magnet Links
 
-Storage information
+Support opening from
 
-App version
+Safari
 
-Diagnostics
+Chrome
+
+Firefox
+
+Other browsers
+
+Support
+
+Share Sheet
+
+Open In
+
+Custom URL Scheme
+
+Universal Links if applicable.
 
 ---
 
 # File Browser
 
-Modern iOS file browser.
+Show downloaded files.
 
-Features:
+Folders
 
-* folders
-* thumbnails
-* sorting
-* search
-* preview
-* rename
-* delete
-* move
-* share
-* open in Files
+Move
+
+Rename
+
+Delete
+
+Share
+
+Preview supported files
+
+Sort
+
+Search
+
+Grid/List toggle
 
 ---
 
-# Networking
+# Download Folder
 
-Architecture:
+Application Documents
 
-Flutter UI
+Create
 
-Native Swift plugin where required
+Downloads/
 
-Reliable networking layer
+Each torrent inside its own folder.
 
-Background-safe architecture where supported by iOS
+Example
 
-Persistent sessions
+Downloads/
 
-Graceful reconnects
+Ubuntu ISO/
 
-Automatic retries
+movie/
+
+Linux/
+
+---
+
+# Torrent Controls
+
+Pause
+
+Resume
+
+Force recheck
+
+Force announce
+
+Remove download only
+
+Remove torrent and data
+
+Sequential download
+
+Bandwidth priority
+
+Move download
+
+Rename
+
+---
+
+# Settings
+
+Default download folder
+
+Auto start torrents
+
+Maximum downloads
+
+Maximum active torrents
+
+Maximum peers
+
+Maximum upload slots
+
+Connection timeout
+
+Port
+
+Encryption
+
+Sequential mode default
+
+Background keep-alive options
+
+Storage information
+
+Cache size
+
+Clear cache
+
+Theme
+
+About
 
 ---
 
 # Performance
 
-Requirements:
+Support torrents over 100 GB.
 
-Fast startup
+Thousands of files.
 
-Smooth scrolling
+Low RAM usage.
 
-No UI jank
+Efficient disk writes.
 
-Lazy loading
-
-Efficient caching
-
-Minimal rebuilds
-
-Memory efficient
-
-Battery conscious
+Avoid UI jank.
 
 ---
 
-# Animations
+# Persistence
 
-Use premium animations.
+Remember
 
-Examples:
+Downloads
 
-glass morphing
+Progress
 
-matched geometry
+Paused state
 
-hero transitions
+Resume data
 
-spring animations
+Settings
 
-interactive gestures
+Recent torrents
 
-parallax
-
-subtle haptics
-
-micro-interactions
-
-Everything should feel alive.
+Even after app restart.
 
 ---
 
-# Accessibility
+# Notifications
 
-Support:
+Local notifications
 
-VoiceOver
+Download completed
 
-Dynamic Type
+Torrent added
 
-High contrast
+Errors
 
-Large touch targets
+Paused
 
-Reduced Motion
-
----
-
-# Security
-
-Store sensitive information securely.
-
-Use Keychain for credentials and tokens.
-
-Avoid logging secrets.
-
-Validate inputs.
-
-Handle network failures gracefully.
-
----
-
-# Code Quality
-
-Use a clean architecture with clear separation of concerns.
-
-Suggested layers:
-
-* Presentation
-* Domain
-* Data
-* Services
-* Repository
-* Models
-
-State management:
-
-Riverpod
-
-Routing:
-
-go_router
-
-Networking:
-
-Dio
-
-Storage:
-
-Hive or Isar for local persistence
-
-Secure storage:
-
-flutter_secure_storage
-
-Use dependency injection.
-
-Write modular, testable code.
-
----
-
-# Native iOS Feel
-
-The application should feel native in every interaction:
-
-* iOS navigation bar
-* native context menus
-* swipe gestures
-* haptic feedback
-* pull to refresh
-* smooth physics
-* native dialogs
-* native share sheet
-* native document picker
-* native blur effects
-
-Avoid Material widgets where iOS equivalents exist.
+Storage full
 
 ---
 
 # Error Handling
 
-Handle gracefully:
+Invalid torrent
 
-Network failures
+Invalid magnet
 
-Proxy failures
-
-Authentication errors
+No storage
 
 Disk full
 
-Connection timeouts
+Tracker timeout
 
-Interrupted downloads
+Network unavailable
 
-Malformed torrent files
+Metadata failed
 
-Unavailable peers
+Hash mismatch
 
-User cancellation
+Permission denied
 
-Display clear, non-technical error messages.
+Graceful recovery.
 
 ---
 
-# Final Deliverables
+# Clipboard
 
-Provide:
+Automatically detect
 
-* Complete Flutter source code
-* iOS project configured and ready to build
-* Well-organized folder structure
-* Clean, documented code
-* Setup instructions
-* Dependency list
-* Build instructions
-* Test coverage for critical logic
-* README with screenshots/placeholders
-* GitHub Actions workflow to produce an unsigned IPA suitable for manual signing
+Magnet links
 
-The finished application should feel like a premium App Store-quality iPhone app, with exceptional polish, fluid performance, and a refined native iOS experience while supporting personal management of torrent workflows, cloud integration, and downloaded files.
+Offer
+
+Paste and Download
+
+---
+
+# Share Extension Support
+
+Accept
+
+.torrent
+
+magnet links
+
+Files
+
+Text
+
+---
+
+# Background Behavior
+
+iOS severely limits background execution.
+
+Design accordingly:
+
+* Continue downloading while the app remains active or within the limited background time granted by iOS.
+* Save torrent session state frequently so downloads resume quickly when the app is reopened.
+* Handle interruptions gracefully (phone lock, app termination, low memory).
+
+Do not claim unlimited background torrent downloading unless using platform capabilities that actually permit it.
+
+---
+
+# Storage
+
+Calculate
+
+Remaining storage
+
+Downloaded today
+
+Downloaded total
+
+Active size
+
+Free space
+
+---
+
+# Security
+
+Validate torrents
+
+Prevent path traversal
+
+Prevent invalid filenames
+
+Verify pieces
+
+Handle corrupt resume data
+
+No analytics
+
+No advertisements
+
+No tracking
+
+Entirely offline except for BitTorrent networking.
+
+---
+
+# Architecture
+
+Feature-first architecture.
+
+Example
+
+lib/
+
+features/
+
+downloads/
+
+torrent/
+
+settings/
+
+shared/
+
+core/
+
+services/
+
+repositories/
+
+models/
+
+widgets/
+
+Use
+
+Repository Pattern
+
+Dependency Injection
+
+Riverpod providers
+
+Clean Architecture principles
+
+---
+
+# Code Quality
+
+Strict linting
+
+Null safety
+
+Well documented code
+
+Reusable widgets
+
+No duplicated logic
+
+Modular code
+
+Small files
+
+Meaningful naming
+
+Unit tests for parsing, persistence, and core logic where practical.
+
+---
+
+# GitHub Actions
+
+Provide a complete macOS workflow that:
+
+* Installs Flutter
+* Resolves dependencies
+* Builds the iOS project
+* Produces an unsigned `.app`
+* Packages an unsigned `.ipa`
+* Uploads the IPA as a workflow artifact
+
+The workflow should be reproducible with a standard Flutter iOS project and avoid requiring Apple code signing.
+
+---
+
+# Deliverables
+
+The AI agent should generate:
+
+* Complete Flutter project
+* iOS-compatible code
+* Native integration for the BitTorrent engine (FFI or Swift wrapper)
+* Responsive Cupertino UI
+* State management
+* Persistent storage
+* Import/export support for `.torrent` files
+* Magnet link handling
+* Share Sheet integration
+* Custom URL scheme for `magnet:` links
+* Robust error handling
+* GitHub Actions workflow for building an unsigned IPA
+* Clear README with setup, build, and sideloading instructions
+
+The resulting app should feel polished, performant, and native on an iPhone while remaining focused on its single purpose: downloading content from user-provided `.torrent` files and magnet links.

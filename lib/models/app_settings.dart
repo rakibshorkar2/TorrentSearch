@@ -11,9 +11,6 @@ class AppSettings {
   final int uploadSpeedLimit;
   final int connectionTimeout;
   final bool hapticFeedback;
-  final bool confirmBeforeDownload;
-  final bool autoDownloadCompletedSeedr;
-  final bool saveSearchHistory;
   final int? screenAwakeMinutes;
 
   const AppSettings({
@@ -29,9 +26,6 @@ class AppSettings {
     this.uploadSpeedLimit = 0,
     this.connectionTimeout = 10,
     this.hapticFeedback = true,
-    this.confirmBeforeDownload = true,
-    this.autoDownloadCompletedSeedr = false,
-    this.saveSearchHistory = true,
     this.screenAwakeMinutes,
   });
 
@@ -48,9 +42,6 @@ class AppSettings {
     int? uploadSpeedLimit,
     int? connectionTimeout,
     bool? hapticFeedback,
-    bool? confirmBeforeDownload,
-    bool? autoDownloadCompletedSeedr,
-    bool? saveSearchHistory,
     int? screenAwakeMinutes,
   }) {
     return AppSettings(
@@ -66,9 +57,6 @@ class AppSettings {
       uploadSpeedLimit: uploadSpeedLimit ?? this.uploadSpeedLimit,
       connectionTimeout: connectionTimeout ?? this.connectionTimeout,
       hapticFeedback: hapticFeedback ?? this.hapticFeedback,
-      confirmBeforeDownload: confirmBeforeDownload ?? this.confirmBeforeDownload,
-      autoDownloadCompletedSeedr: autoDownloadCompletedSeedr ?? this.autoDownloadCompletedSeedr,
-      saveSearchHistory: saveSearchHistory ?? this.saveSearchHistory,
       screenAwakeMinutes: screenAwakeMinutes ?? this.screenAwakeMinutes,
     );
   }
