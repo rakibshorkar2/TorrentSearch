@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
@@ -7,14 +8,23 @@ import 'services/storage_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final storage = StorageService();
-  await storage.init();
 
-  runApp(
-    const ProviderScope(
-      child: TorrentFlowAppStartup(),
-    ),
-  );
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+  };
+
+  runZonedGuarded(() async {
+    final storage = StorageService();
+    await storage.init();
+
+    runApp(
+      const ProviderScope(
+        child: TorrentFlowAppStartup(),
+      ),
+    );
+  }, (error, stack) {
+    debugPrint('Uncaught error: $error\n$stack');
+  });
 }
 
 class TorrentFlowAppStartup extends ConsumerStatefulWidget {

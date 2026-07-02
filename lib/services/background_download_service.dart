@@ -23,8 +23,12 @@ class BackgroundDownloadService {
     if (_isInitialized || !Platform.isIOS) return;
     _isInitialized = true;
 
-    if (await _native.requestNotificationPermission()) {
-      await _native.enableBackgroundMode();
+    try {
+      if (await _native.requestNotificationPermission()) {
+        await _native.enableBackgroundMode();
+      }
+    } catch (e) {
+      appLogger.e('Failed to initialize background mode', error: e);
     }
 
     _startKeepAlive();
