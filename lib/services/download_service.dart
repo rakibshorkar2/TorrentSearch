@@ -4,8 +4,6 @@ import 'package:dio/dio.dart';
 import '../models/torrent.dart';
 import '../core/constants/app_constants.dart';
 import '../logging/app_logger.dart';
-import 'torrent_engine/torrent_service.dart';
-import 'torrent_engine/torrent_engine.dart' as engine;
 
 class DownloadService {
   final Dio _dio;
@@ -62,11 +60,6 @@ class DownloadService {
   }
 
   void _startDownload(String id, String url, StreamController<DownloadTask> controller, {bool isRetry = false}) {
-    if (url.startsWith('magnet:')) {
-      _startMagnetDownload(id, url, controller);
-      return;
-    }
-
     _updateTaskById(id, status: DownloadStatus.downloading, downloadedBytes: 0);
     _retryCounts.putIfAbsent(id, () => 0);
 
@@ -139,86 +132,7 @@ class DownloadService {
   }
 
   bool _canResolveUrl(String url) {
-    if (url.startsWith('magnet:')) return true;
     return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('ftp://');
-  }
-
-  StreamSubscription<engine.TorrentStatus>? _engineSub;
-  final Map<String, String> _activeEngineIds = {};
-  final Map<String, StreamController<DownloadTask>> _engineTaskControllers = {};
-
-  void _startMagnetDownload(String id, String url, StreamController<DownloadTask> controller) {
-    _updateTaskById(id, status: DownloadStatus.downloading);
-    final task = _tasks.firstWhere((t) => t.id == id);
-    _ensureDirectory(task.savePath);
-
-    final svc = TorrentService.instance;
-    svc.addMagnet(url, name: task.title, savePath: task.savePath).then((torrentId) {
-      _activeEngineIds[id] = torrentId;
-      _engineTaskControllers[torrentId] = controller;
-      _engineSub ??= svc.updates().listen(_handleEngineUpdate);
-    }).catchError((error) {
-      if (!controller.isClosed) {
-        _updateTaskById(id, status: DownloadStatus.error);
-        controller.add(_tasks.firstWhere((t) => t.id == id));
-      }
-    });
-  }
-
-  void _handleEngineUpdate(engine.TorrentStatus status) {
-    final controller = _engineTaskControllers[status.id];
-    if (controller == null) return;
-
-    final taskId = _activeEngineIds.entries
-      .firstWhere(
-        (e) => e.value == status.id,
-        orElse: () => const MapEntry('', ''),
-      ).key;
-    if (taskId.isEmpty) return;
-
-    final engineState = status.state;
-    DownloadStatus dlStatus;
-    switch (engineState) {
-      case engine.TorrentState.downloading:
-        dlStatus = DownloadStatus.downloading;
-        break;
-      case engine.TorrentState.finished:
-      case engine.TorrentState.seeding:
-        dlStatus = DownloadStatus.completed;
-        break;
-      case engine.TorrentState.error:
-        dlStatus = DownloadStatus.error;
-        break;
-      case engine.TorrentState.paused:
-        dlStatus = DownloadStatus.paused;
-        break;
-      case engine.TorrentState.queued:
-      case engine.TorrentState.checking:
-        dlStatus = DownloadStatus.queued;
-        break;
-    }
-
-    _updateTaskById(taskId,
-      status: dlStatus,
-      progress: status.progress,
-      downloadedBytes: status.totalDownloaded,
-      totalSize: status.totalSize,
-      downloadSpeed: status.downloadRate,
-      uploadSpeed: status.uploadRate,
-      peers: status.peers,
-      seeders: status.seeders,
-    );
-
-    if (!controller.isClosed) {
-      final idx = _tasks.indexWhere((t) => t.id == taskId);
-      if (idx >= 0) controller.add(_tasks[idx]);
-    }
-
-    if (dlStatus == DownloadStatus.completed || dlStatus == DownloadStatus.error) {
-      _updateTaskById(taskId, completedAt: DateTime.now());
-      _engineTaskControllers.remove(status.id);
-      _cleanup(taskId);
-    }
   }
 
   void _ensureDirectory(String path) {
@@ -260,10 +174,6 @@ class DownloadService {
     _cancelTokens[taskId]?.cancel();
     _tasks.removeWhere((t) => t.id == taskId);
     _retryCounts.remove(taskId);
-    final engineId = _activeEngineIds.remove(taskId);
-    if (engineId != null) {
-      _engineTaskControllers.remove(engineId);
-    }
     _cleanup(taskId);
   }
 
@@ -337,19 +247,15 @@ class DownloadService {
   }
 
   void dispose() {
-    _engineSub?.cancel();
     for (final token in _cancelTokens.values) {
       token.cancel();
     }
     for (final controller in _controllers.values) {
       controller.close();
     }
-    _activeEngineIds.clear();
-    _engineTaskControllers.clear();
     _cancelTokens.clear();
     _controllers.clear();
     _tasks.clear();
     _retryCounts.clear();
-    TorrentService.instance.shutdown();
   }
 }

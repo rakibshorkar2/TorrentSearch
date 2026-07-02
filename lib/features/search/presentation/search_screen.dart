@@ -462,7 +462,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   }
                 },
                 onSendToSeedr: () => _sendToSeedr(torrent),
-                onDownload: () => _startDownload(torrent),
+                onDownload: torrent.fileUrl?.isNotEmpty == true
+                    ? () => _startDownload(torrent)
+                    : () => _sendToSeedr(torrent),
               );
             },
             childCount: result.results.length,
@@ -503,7 +505,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     int added = 0;
     for (final torrent in result.results) {
       if (_selectedTorrents.contains(torrent.id)) {
-        final url = torrent.fileUrl?.isNotEmpty == true ? torrent.fileUrl! : torrent.magnetUri;
+        final url = torrent.fileUrl;
         if (url == null || url.isEmpty) continue;
         final safeName = torrent.title.replaceAll(RegExp(r'[^\w\s\-.]'), '').trim();
         final savePath = '${downloadsDir.path}/${safeName.isNotEmpty ? safeName : 'download'}';
@@ -554,7 +556,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 
   Future<void> _startDownload(TorrentInfo torrent) async {
-    final url = torrent.fileUrl?.isNotEmpty == true ? torrent.fileUrl! : torrent.magnetUri;
+    final url = torrent.fileUrl;
     if (url == null || url.isEmpty) return;
     HapticFeedback.mediumImpact();
     try {

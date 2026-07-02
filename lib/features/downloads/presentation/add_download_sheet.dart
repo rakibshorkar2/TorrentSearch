@@ -164,21 +164,23 @@ class _AddDownloadSheetState extends ConsumerState<AddDownloadSheet> {
               child: Text(_error!, style: TorrentFlowTheme.footnote.copyWith(color: TorrentFlowTheme.error)),
             ),
           ],
-          const SizedBox(height: 20),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: TorrentFlowTheme.standardPadding),
-            child: SizedBox(
-              width: double.infinity,
-              child: CupertinoButton.filled(
-                onPressed: _isAdding ? null : _addDownload,
-                child: _isAdding
-                    ? const CupertinoActivityIndicator(color: CupertinoColors.white)
-                    : Text('Start Download'),
+          if (_hasDirectUrl) ...[
+            const SizedBox(height: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: TorrentFlowTheme.standardPadding),
+              child: SizedBox(
+                width: double.infinity,
+                child: CupertinoButton.filled(
+                  onPressed: _isAdding ? null : _addDownload,
+                  child: _isAdding
+                      ? const CupertinoActivityIndicator(color: CupertinoColors.white)
+                      : const Text('Start Download'),
+                ),
               ),
             ),
-          ),
+          ],
           if (_magnetOnly) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: TorrentFlowTheme.standardPadding),
               child: SizedBox(
