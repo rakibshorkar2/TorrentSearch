@@ -1,0 +1,1 @@
+analyze and fix the white screen issue when i try to open the app in mt iphone.it shows nothing

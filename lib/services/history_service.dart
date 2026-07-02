@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/history_item.dart';
 import '../core/constants/app_constants.dart';
+import '../logging/app_logger.dart';
 
 class HistoryService {
   static HistoryService? _instance;
@@ -15,7 +16,22 @@ class HistoryService {
   }
 
   Future<void> init() async {
-    _box = await Hive.openBox<String>(AppConstants.hiveBoxHistory);
+    _box = await _openSafeBox(AppConstants.hiveBoxHistory);
+  }
+
+  Future<Box<String>> _openSafeBox(String boxName) async {
+    try {
+      return await Hive.openBox<String>(boxName);
+    } catch (e, st) {
+      appLogger.e('Failed to open Hive box $boxName, attempting to delete and recreate', error: e, stackTrace: st);
+      try {
+        await Hive.deleteBoxFromDisk(boxName);
+        return await Hive.openBox<String>(boxName);
+      } catch (re, rest) {
+        appLogger.e('Failed to delete/recreate box $boxName', error: re, stackTrace: rest);
+        rethrow;
+      }
+    }
   }
 
   Future<List<HistoryItem>> loadAll() async {

@@ -22,9 +22,24 @@ class StorageService {
 
   Future<void> init() async {
     await Hive.initFlutter();
-    _settingsBox = await Hive.openBox<String>(AppConstants.hiveBoxSettings);
-    _downloadsBox = await Hive.openBox<String>(AppConstants.hiveBoxDownloads);
-    _searchHistoryBox = await Hive.openBox<String>(AppConstants.hiveBoxSearchHistory);
+    _settingsBox = await _openSafeBox(AppConstants.hiveBoxSettings);
+    _downloadsBox = await _openSafeBox(AppConstants.hiveBoxDownloads);
+    _searchHistoryBox = await _openSafeBox(AppConstants.hiveBoxSearchHistory);
+  }
+
+  Future<Box<String>> _openSafeBox(String boxName) async {
+    try {
+      return await Hive.openBox<String>(boxName);
+    } catch (e, st) {
+      appLogger.e('Failed to open Hive box $boxName, attempting to delete and recreate', error: e, stackTrace: st);
+      try {
+        await Hive.deleteBoxFromDisk(boxName);
+        return await Hive.openBox<String>(boxName);
+      } catch (re, rest) {
+        appLogger.e('Failed to delete/recreate box $boxName', error: re, stackTrace: rest);
+        rethrow;
+      }
+    }
   }
 
   // Settings
