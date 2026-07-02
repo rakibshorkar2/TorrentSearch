@@ -127,15 +127,22 @@ final searchHistoryProvider = StateNotifierProvider<SearchHistoryNotifier, List<
 
 class SearchHistoryNotifier extends StateNotifier<List<String>> {
   final StorageService _storage;
+  bool _disposed = false;
 
   SearchHistoryNotifier(this._storage) : super([]) {
     _load();
   }
 
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
   Future<void> _load() async {
     try {
       final history = await _storage.loadSearchHistory();
-      if (!mounted) return;
+      if (_disposed) return;
       state = history;
     } catch (e) {
       appLogger.e('Failed to load search history', error: e);

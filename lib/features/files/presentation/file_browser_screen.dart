@@ -311,7 +311,20 @@ class _FileOptionsSheet extends StatelessWidget {
     );
   }
 
-  void _renameEntity(BuildContext context, FileSystemEntity entity) {
+  void _showError(BuildContext context, String message) {
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Error'),
+        content: Text(message),
+        actions: [
+          CupertinoButton(child: const Text('OK'), onPressed: () => Navigator.of(ctx).pop()),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _renameEntity(BuildContext context, FileSystemEntity entity) async {
     final name = entity.path.split(Platform.pathSeparator).last;
     final controller = TextEditingController(text: name);
 
@@ -330,15 +343,19 @@ class _FileOptionsSheet extends StatelessWidget {
           ),
           CupertinoButton(
             child: const Text('Rename'),
-            onPressed: () {
+            onPressed: () async {
               final newName = controller.text.trim();
               if (newName.isNotEmpty && newName != name) {
-                final parent = entity.parent;
-                final newPath = '${parent.path}${Platform.pathSeparator}$newName';
-                entity.rename(newPath);
-                refresh();
+                try {
+                  final parent = entity.parent;
+                  final newPath = '${parent.path}${Platform.pathSeparator}$newName';
+                  await entity.rename(newPath);
+                  if (context.mounted) refresh();
+                } catch (e) {
+                  if (context.mounted) _showError(context, 'Rename failed: $e');
+                }
               }
-              Navigator.of(ctx).pop();
+              if (context.mounted) Navigator.of(ctx).pop();
             },
           ),
         ],
@@ -359,10 +376,14 @@ class _FileOptionsSheet extends StatelessWidget {
           ),
           CupertinoButton(
             child: Text('Delete', style: const TextStyle(color: TorrentFlowTheme.error)),
-            onPressed: () {
-              entity.delete(recursive: entity is Directory);
-              refresh();
-              Navigator.of(ctx).pop();
+            onPressed: () async {
+              try {
+                await entity.delete(recursive: entity is Directory);
+                if (context.mounted) refresh();
+              } catch (e) {
+                if (context.mounted) _showError(context, 'Delete failed: $e');
+              }
+              if (context.mounted) Navigator.of(ctx).pop();
             },
           ),
         ],

@@ -39,7 +39,7 @@ class DownloadTasksNotifier extends StateNotifier<List<DownloadTask>> {
   Future<void> _load() async {
     try {
       final tasks = await _storage.loadDownloads();
-      if (!mounted) return;
+      if (_disposed) return;
       state = tasks;
     } catch (e) {
       appLogger.e('Failed to load downloads', error: e);
@@ -155,6 +155,16 @@ class DownloadTasksNotifier extends StateNotifier<List<DownloadTask>> {
     _persist();
   }
 
+  void removeAll() {
+    final ids = state.map((t) => t.id).toList();
+    for (final id in ids) {
+      _service.remove(id);
+      _subscriptions.remove(id)?.cancel();
+    }
+    state = [];
+    _persist();
+  }
+
   void moveTask(int oldIndex, int newIndex) {
     final list = [...state];
     final task = list.removeAt(oldIndex);
@@ -185,8 +195,11 @@ class DownloadTasksNotifier extends StateNotifier<List<DownloadTask>> {
     }
   }
 
+  bool _disposed = false;
+
   @override
   void dispose() {
+    _disposed = true;
     for (final sub in _subscriptions.values) {
       sub.cancel();
     }

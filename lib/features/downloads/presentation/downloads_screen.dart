@@ -450,14 +450,15 @@ class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
   }
 
   void _showAddOptions(BuildContext context) {
+    final ctx = context;
     showCupertinoModalPopup(
-      context: context,
-      builder: (context) => Container(
+      context: ctx,
+      builder: (popupContext) => Container(
         padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).padding.bottom + TorrentFlowTheme.standardPadding,
+          bottom: MediaQuery.of(popupContext).padding.bottom + TorrentFlowTheme.standardPadding,
         ),
         decoration: BoxDecoration(
-          color: CupertinoTheme.brightnessOf(context) == Brightness.dark
+          color: CupertinoTheme.brightnessOf(popupContext) == Brightness.dark
               ? TorrentFlowTheme.darkSurface
               : TorrentFlowTheme.lightSurface,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
@@ -479,8 +480,8 @@ class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
               padding: const EdgeInsets.all(TorrentFlowTheme.standardPadding),
               child: Text('Add Download', style: TorrentFlowTheme.title3),
             ),
-            _MenuButton(icon: CupertinoIcons.link, label: 'Paste Magnet Link', onTap: () { Navigator.of(context).pop(); _showMagnetInput(context); }),
-            _MenuButton(icon: CupertinoIcons.doc, label: 'Import .torrent File', onTap: () { Navigator.of(context).pop(); _importTorrentFile(context); }),
+            _MenuButton(icon: CupertinoIcons.link, label: 'Paste Magnet Link', onTap: () { Navigator.of(popupContext).pop(); _showMagnetInput(ctx); }),
+            _MenuButton(icon: CupertinoIcons.doc, label: 'Import .torrent File', onTap: () { Navigator.of(popupContext).pop(); _importTorrentFile(ctx); }),
           ],
         ),
       ),

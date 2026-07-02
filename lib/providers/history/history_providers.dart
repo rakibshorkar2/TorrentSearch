@@ -14,15 +14,22 @@ final historyProvider =
 
 class HistoryNotifier extends StateNotifier<List<HistoryItem>> {
   final HistoryService _service;
+  bool _disposed = false;
 
   HistoryNotifier(this._service) : super([]) {
     _load();
   }
 
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
   Future<void> _load() async {
     try {
       final items = await _service.loadAll();
-      if (!mounted) return;
+      if (_disposed) return;
       state = items;
     } catch (e) {
       appLogger.e('Failed to load history', error: e);

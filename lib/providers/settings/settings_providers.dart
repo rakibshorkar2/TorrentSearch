@@ -86,15 +86,22 @@ class ScreenAwakeController {
 
 class SettingsNotifier extends StateNotifier<AppSettings> {
   final StorageService _storage;
+  bool _disposed = false;
 
   SettingsNotifier(this._storage) : super(const AppSettings()) {
     _load();
   }
 
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
   Future<void> _load() async {
     try {
       final settings = await _storage.loadSettings();
-      if (!mounted) return;
+      if (_disposed) return;
       state = settings;
     } catch (e) {
       appLogger.e('Failed to load settings', error: e);

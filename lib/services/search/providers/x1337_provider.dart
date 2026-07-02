@@ -1,5 +1,5 @@
 import 'package:dio/dio.dart';
-import '../../../../logging/app_logger.dart';
+import '../../../logging/app_logger.dart';
 import '../../../models/torrent.dart';
 
 class X1337Provider {

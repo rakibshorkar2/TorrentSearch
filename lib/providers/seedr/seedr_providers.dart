@@ -54,9 +54,16 @@ class SeedrAccountState {
 class SeedrAccountsNotifier extends StateNotifier<List<SeedrAccountState>> {
   final SeedrService _service;
   int _activeAccountIndex = 0;
+  bool _disposed = false;
 
   SeedrAccountsNotifier(this._service) : super([]) {
     _loadAccounts();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 
   int get activeAccountIndex => _activeAccountIndex;
@@ -66,6 +73,7 @@ class SeedrAccountsNotifier extends StateNotifier<List<SeedrAccountState>> {
   Future<void> _loadAccounts() async {
     try {
       final accounts = await _service.loadSavedAccounts();
+      if (_disposed) return;
       if (accounts.isEmpty) {
         state = [];
         return;
@@ -73,6 +81,7 @@ class SeedrAccountsNotifier extends StateNotifier<List<SeedrAccountState>> {
       state = accounts.map((email) => SeedrAccountState(email: email)).toList();
       for (var i = 0; i < state.length; i++) {
         await _checkAndLoadAccount(i);
+        if (_disposed) return;
       }
     } catch (e) {
       appLogger.e('Failed to load Seedr accounts', error: e);
@@ -83,7 +92,7 @@ class SeedrAccountsNotifier extends StateNotifier<List<SeedrAccountState>> {
     if (index >= state.length) return;
     final email = state[index].email;
     final loggedIn = await _service.isLoggedInForAccount(email);
-    if (!loggedIn) return;
+    if (!loggedIn || _disposed) return;
 
     state = [
       for (var i = 0; i < state.length; i++)
@@ -95,6 +104,7 @@ class SeedrAccountsNotifier extends StateNotifier<List<SeedrAccountState>> {
 
     try {
       final account = await _service.getAccount();
+      if (_disposed) return;
       state = [
         for (var i = 0; i < state.length; i++)
           if (i == index)
@@ -103,6 +113,7 @@ class SeedrAccountsNotifier extends StateNotifier<List<SeedrAccountState>> {
             state[i],
       ];
     } catch (e) {
+      if (_disposed) return;
       state = [
         for (var i = 0; i < state.length; i++)
           if (i == index)
@@ -133,9 +144,11 @@ class SeedrAccountsNotifier extends StateNotifier<List<SeedrAccountState>> {
     }
   }
 
-  void switchAccount(int index) {
+  Future<void> switchAccount(int index) async {
     if (index >= 0 && index < state.length) {
       _activeAccountIndex = index;
+      final email = state[index].email;
+      await _service.isLoggedInForAccount(email);
     }
   }
 

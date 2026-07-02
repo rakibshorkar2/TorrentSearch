@@ -265,7 +265,7 @@ class SettingsScreen extends ConsumerWidget {
           CupertinoButton(
             child: Text('Clear', style: TextStyle(color: TorrentFlowTheme.error)),
             onPressed: () {
-              ref.read(downloadTasksProvider.notifier).removeCompleted();
+              ref.read(downloadTasksProvider.notifier).removeAll();
               Navigator.of(ctx).pop();
             },
           ),

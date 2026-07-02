@@ -36,6 +36,7 @@ class PeerConnection {
 
   final Completer<void> _metadataDone = Completer();
   StreamController<Uint8List>? _pieceController;
+  StreamSubscription<Uint8List>? _socketSubscription;
 
   int _bufferOffset = 0;
   Uint8List _buffer = Uint8List(0);
@@ -105,11 +106,13 @@ class PeerConnection {
 
   void startMessageLoop(StreamController<Uint8List> pieceController) {
     _pieceController = pieceController;
-    _socket!.listen(
-      (data) => _handleData(data),
-      onError: (_) => _cleanup(),
-      onDone: () => _cleanup(),
-    );
+    if (_socketSubscription == null && _socket != null) {
+      _socketSubscription = _socket!.listen(
+        (data) => _handleData(data),
+        onError: (_) => _cleanup(),
+        onDone: () => _cleanup(),
+      );
+    }
   }
 
   void _handleData(Uint8List data) {
@@ -164,9 +167,6 @@ class PeerConnection {
 
     if (_pieceController != null && !_pieceController!.isClosed) {
       _pieceController!.add(block);
-    }
-    if (_pieceController != null && !_pieceController!.isClosed) {
-      _pieceController!.close();
     }
   }
 
@@ -355,6 +355,8 @@ class PeerConnection {
 
   void _cleanup() {
     _connected = false;
+    _socketSubscription?.cancel();
+    _socketSubscription = null;
     if (!_metadataDone.isCompleted) _metadataDone.complete();
   }
 

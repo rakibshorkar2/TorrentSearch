@@ -514,15 +514,17 @@ class _SeedrScreenState extends ConsumerState<SeedrScreen> {
     }
   }
 
-  void _switchToAccount(int index) {
+  Future<void> _switchToAccount(int index) async {
     final notifier = ref.read(seedrAccountsProvider.notifier);
-    notifier.switchAccount(index);
-    setState(() {
-      _activeAccountIndex = index;
-      _isLoggedIn = true;
-      _items = [];
-    });
-    _loadContents();
+    await notifier.switchAccount(index);
+    if (mounted) {
+      setState(() {
+        _activeAccountIndex = index;
+        _isLoggedIn = true;
+        _items = [];
+      });
+      _loadContents();
+    }
   }
 
   void _showAddAccountDialog() {
